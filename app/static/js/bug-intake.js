@@ -14,8 +14,11 @@
 
     function _bugIntakeInit() {
         // ── Config ──────────────────────────────────────────────
-        var REPORT_URL  = '/api/bug-intake/report';
-        var STATUS_URL  = '/api/bug-intake/status';
+        var cfg = window.AI_OPS_CONFIG || {};
+        var REPORT_URL  = cfg.endpoint || '/api/bug-intake/report';
+        var STATUS_URL  = cfg.statusEndpoint || '/api/bug-intake/status';
+        var API_KEY     = cfg.apiKey || null;
+        var APP_NAME    = cfg.appName || null;
         var DEDUP_MS    = 30 * 60 * 1000; // 30 minutes
         var POLL_MS     = 30 * 1000;      // 30 seconds
         var CONSOLE_MAX = 20;
@@ -219,9 +222,12 @@
         function _sendReport(payload) {
             try {
                 // Use XMLHttpRequest to avoid re-triggering our fetch interceptor
+                if (APP_NAME) payload.app_name = APP_NAME;
+
                 var xhr = new XMLHttpRequest();
                 xhr.open('POST', REPORT_URL, true);
                 xhr.setRequestHeader('Content-Type', 'application/json');
+                if (API_KEY) xhr.setRequestHeader('X-API-Key', API_KEY);
                 xhr.onload = function() {
                     try {
                         if (xhr.status >= 200 && xhr.status < 300) {
@@ -255,6 +261,7 @@
 
                     var xhr = new XMLHttpRequest();
                     xhr.open('GET', STATUS_URL + '?session_token=' + token, true);
+                    if (API_KEY) xhr.setRequestHeader('X-API-Key', API_KEY);
                     xhr.onload = function() {
                         try {
                             if (xhr.status !== 200) return;

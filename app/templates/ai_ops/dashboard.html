@@ -61,6 +61,26 @@
         </div>
     </div>
 
+    <!-- Usage Widget -->
+    {% if usage %}
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="fw-medium text-muted"><i class="fas fa-bug text-danger me-1"></i> Fixes this month</span>
+                        <span class="fw-bold">{{ usage.fixes_used }} / {{ usage.monthly_fix_limit }}</span>
+                    </div>
+                    {% set fix_pct = ((usage.fixes_used / usage.monthly_fix_limit) * 100) if usage.monthly_fix_limit else 0 %}
+                    <div class="progress" style="height: 6px;">
+                        <div class="progress-bar bg-danger" style="width: {{ [fix_pct, 100] | min }}%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Session Summary Counters -->
     {% set ns = namespace(total=0, completed=0, failed=0, running=0) %}
     {% for sess in sessions %}

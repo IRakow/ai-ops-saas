@@ -35,7 +35,8 @@ class AIOpsNotificationService:
     # HIGH-LEVEL NOTIFICATION METHODS
     # =========================================================================
 
-    def notify_plan_ready(self, session_title, session_id, plan_url):
+    def notify_plan_ready(self, session_title, session_id, plan_url,
+                          tenant_emails: list[str] = None):
         """Notify when a task plan is ready for review."""
         subject = f"AI Ops: Plan Ready for Review — {session_title}"
         body = (
@@ -46,10 +47,11 @@ class AIOpsNotificationService:
         )
         sms = f"AI Ops: Plan ready for \"{session_title}\". Review at {plan_url}"
 
-        self._send_all_emails(subject, body)
+        self._send_all_emails(subject, body, tenant_emails=tenant_emails)
         self._send_all_sms(sms)
 
-    def notify_coding_started(self, session_title, session_id):
+    def notify_coding_started(self, session_title, session_id,
+                              tenant_emails: list[str] = None):
         """Notify when coding has started (email only)."""
         subject = f"AI Ops: Coding Started — {session_title}"
         body = (
@@ -57,9 +59,10 @@ class AIOpsNotificationService:
             f"Session: {session_title}\n"
             f"You'll be notified when the work is deployed to staging."
         )
-        self._send_all_emails(subject, body)
+        self._send_all_emails(subject, body, tenant_emails=tenant_emails)
 
-    def notify_deployed_staging(self, session_title, session_id, staging_url, commit_sha=None):
+    def notify_deployed_staging(self, session_title, session_id, staging_url,
+                                commit_sha=None, tenant_emails: list[str] = None):
         """Notify when changes are deployed to staging."""
         subject = f"AI Ops: Deployed to Staging — {session_title}"
         body = (
@@ -75,10 +78,11 @@ class AIOpsNotificationService:
         )
         sms = f"AI Ops: \"{session_title}\" deployed to staging. Test at {staging_url}"
 
-        self._send_all_emails(subject, body)
+        self._send_all_emails(subject, body, tenant_emails=tenant_emails)
         self._send_all_sms(sms)
 
-    def notify_pipeline_failed(self, session_title, session_id, error_summary):
+    def notify_pipeline_failed(self, session_title, session_id, error_summary,
+                               tenant_emails: list[str] = None):
         """Notify when the pipeline fails."""
         subject = f"AI Ops: Pipeline Failed — {session_title}"
         body = (
@@ -89,15 +93,19 @@ class AIOpsNotificationService:
         )
         sms = f"AI Ops: Pipeline FAILED for \"{session_title}\". Check email for details."
 
-        self._send_all_emails(subject, body)
+        self._send_all_emails(subject, body, tenant_emails=tenant_emails)
         self._send_all_sms(sms)
 
     # =========================================================================
     # TRANSPORT METHODS
     # =========================================================================
 
-    def _send_all_emails(self, subject, body):
-        """Send email to all recipients via SendGrid."""
+    def _send_all_emails(self, subject, body, tenant_emails: list[str] = None):
+        """Send email to all recipients via SendGrid.
+
+        If tenant_emails is provided, send to those addresses instead of
+        the default RECIPIENTS list from config.
+        """
         if not self.sendgrid_api_key:
             logger.warning("SendGrid API key not configured, skipping email")
             return
@@ -108,7 +116,16 @@ class AIOpsNotificationService:
 
             sg = SendGridAPIClient(self.sendgrid_api_key)
 
-            for recipient in RECIPIENTS:
+            # Use tenant-specific emails if provided, otherwise fall back to config
+            if tenant_emails:
+                recipients = [
+                    {"name": email.split("@")[0].title(), "email": email}
+                    for email in tenant_emails
+                ]
+            else:
+                recipients = RECIPIENTS
+
+            for recipient in recipients:
                 message = Mail(
                     from_email=self.sendgrid_from_email,
                     to_emails=recipient["email"],

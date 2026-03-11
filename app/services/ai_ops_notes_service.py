@@ -39,7 +39,7 @@ class AIOpsNotesService:
     def submit_note(self, content: str, submitter_name: str = None,
                     submitter_email: str = None, submitter_id: str = None,
                     page_url: str = None, page_title: str = None,
-                    metadata: dict = None) -> dict | None:
+                    metadata: dict = None, tenant_id: str = None) -> dict | None:
         """Insert a new feedback note."""
         row = {
             "content": content.strip(),
@@ -51,6 +51,8 @@ class AIOpsNotesService:
             "status": "unreviewed",
             "metadata": metadata or {},
         }
+        if tenant_id:
+            row["tenant_id"] = tenant_id
         try:
             result = self.supabase.table("ai_ops_notes").insert(row).execute()
             return result.data[0] if result.data else None
@@ -58,26 +60,29 @@ class AIOpsNotesService:
             logger.error(f"Failed to submit note: {e}")
             return None
 
-    def list_notes(self, status: str = None, limit: int = 200) -> list:
+    def list_notes(self, status: str = None, limit: int = 200,
+                   tenant_id: str = None) -> list:
         """List notes ordered by created_at DESC, optional status filter."""
         query = self.supabase.table("ai_ops_notes") \
             .select("*") \
             .order("created_at", desc=True) \
             .limit(limit)
+        if tenant_id:
+            query = query.eq("tenant_id", tenant_id)
         if status:
             query = query.eq("status", status)
         result = execute_with_retry(lambda: query.execute())
         return result.data or []
 
-    def count_unreviewed(self) -> int:
+    def count_unreviewed(self, tenant_id: str = None) -> int:
         """Count notes with status='unreviewed'."""
         try:
-            result = execute_with_retry(
-                lambda: self.supabase.table("ai_ops_notes")
-                .select("id", count="exact")
+            query = self.supabase.table("ai_ops_notes") \
+                .select("id", count="exact") \
                 .eq("status", "unreviewed")
-                .execute()
-            )
+            if tenant_id:
+                query = query.eq("tenant_id", tenant_id)
+            result = execute_with_retry(lambda: query.execute())
             return result.count or 0
         except Exception:
             return 0
@@ -106,9 +111,9 @@ class AIOpsNotesService:
     # GEMINI BATCH ANALYSIS
     # =========================================================================
 
-    def analyze_notes(self) -> list:
+    def analyze_notes(self, tenant_id: str = None) -> list:
         """Fetch unreviewed notes, send to Gemini for clustering, save suggestions."""
-        notes = self.list_notes(status="unreviewed", limit=500)
+        notes = self.list_notes(status="unreviewed", limit=500, tenant_id=tenant_id)
         if not notes:
             return []
 
@@ -192,6 +197,8 @@ NOTES:
                 "status": "pending",
                 "analysis_batch_id": batch_id,
             }
+            if tenant_id:
+                row["tenant_id"] = tenant_id
 
             try:
                 result = self.supabase.table("ai_ops_note_suggestions").insert(row).execute()
@@ -211,13 +218,16 @@ NOTES:
     # SUGGESTIONS
     # =========================================================================
 
-    def list_suggestions(self, status: str = None, limit: int = 50) -> list:
+    def list_suggestions(self, status: str = None, limit: int = 50,
+                         tenant_id: str = None) -> list:
         """List suggestions ordered by priority."""
         priority_order = {"High": 1, "Medium": 2, "Low": 3}
         query = self.supabase.table("ai_ops_note_suggestions") \
             .select("*") \
             .order("created_at", desc=True) \
             .limit(limit)
+        if tenant_id:
+            query = query.eq("tenant_id", tenant_id)
         if status:
             query = query.eq("status", status)
         result = execute_with_retry(lambda: query.execute())
@@ -237,7 +247,8 @@ NOTES:
             logger.error(f"Failed to dismiss suggestion {suggestion_id}: {e}")
             return None
 
-    def promote_to_session(self, suggestion_id: str, ai_ops_user_id: str) -> dict | None:
+    def promote_to_session(self, suggestion_id: str, ai_ops_user_id: str,
+                           tenant_id: str = None) -> dict | None:
         """Create an AI Ops session from a suggestion, link notes, return session dict."""
         from app.services.ai_ops_service import AIOpsService
 
@@ -285,7 +296,8 @@ NOTES:
         svc = AIOpsService()
         mode = suggestion.get("suggested_mode", "new_feature")
         title = suggestion.get("suggested_session_title", suggestion["theme"])
-        new_session = svc.create_session(ai_ops_user_id, mode, title=title)
+        new_session = svc.create_session(ai_ops_user_id, mode, title=title,
+                                         tenant_id=tenant_id)
         if not new_session:
             logger.error("Failed to create session from suggestion")
             return None

@@ -54,7 +54,8 @@ class AIOpsKnowledgeService:
 
     def store_fix_pattern(self, session_id, module, bug_summary, root_cause,
                           fix_description, files_changed, diff_summary=None,
-                          resolution_time_seconds=None, tags=None):
+                          resolution_time_seconds=None, tags=None,
+                          tenant_id=None):
         """Store a successful fix pattern in the knowledge base.
 
         Auto-generates tags from module name and keywords in bug_summary if
@@ -75,6 +76,8 @@ class AIOpsKnowledgeService:
             "success": True,
             "tags": tags,
         }
+        if tenant_id:
+            row["tenant_id"] = tenant_id
 
         try:
             result = self.supabase.table("ai_ops_fix_patterns") \
@@ -94,7 +97,8 @@ class AIOpsKnowledgeService:
     # SEARCH
     # =========================================================================
 
-    def find_similar_patterns(self, bug_description, module=None, limit=3):
+    def find_similar_patterns(self, bug_description, module=None, limit=3,
+                              tenant_id=None):
         """Find past fix patterns similar to a given bug description.
 
         Uses keyword-based ILIKE matching against bug_summary and root_cause.
@@ -121,6 +125,8 @@ class AIOpsKnowledgeService:
                 .eq("success", True) \
                 .or_(or_filter)
 
+            if tenant_id:
+                query = query.eq("tenant_id", tenant_id)
             if module:
                 query = query.eq("module", module)
 
@@ -138,18 +144,18 @@ class AIOpsKnowledgeService:
             logger.error(f"Failed to find similar patterns: {e}")
             return []
 
-    def get_patterns_for_module(self, module, limit=10):
+    def get_patterns_for_module(self, module, limit=10, tenant_id=None):
         """Get recent fix patterns for a specific module."""
         try:
-            result = execute_with_retry(
-                lambda: self.supabase.table("ai_ops_fix_patterns")
-                .select("*")
-                .eq("module", module)
-                .eq("success", True)
-                .order("created_at", desc=True)
+            query = self.supabase.table("ai_ops_fix_patterns") \
+                .select("*") \
+                .eq("module", module) \
+                .eq("success", True) \
+                .order("created_at", desc=True) \
                 .limit(limit)
-                .execute()
-            )
+            if tenant_id:
+                query = query.eq("tenant_id", tenant_id)
+            result = execute_with_retry(lambda: query.execute())
             return result.data or []
         except Exception as e:
             logger.error(f"Failed to get patterns for module {module}: {e}")

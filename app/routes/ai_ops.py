@@ -9,7 +9,7 @@ import logging
 import config
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
-    session, flash, jsonify, current_app
+    session, flash, jsonify, current_app, g
 )
 from app.utils.ai_ops_auth import ai_ops_auth_required, get_current_ai_ops_user
 from app.services.ai_ops_service import AIOpsService
@@ -696,3 +696,64 @@ def api_dismiss_suggestion(suggestion_id):
     if result:
         return jsonify({"status": "dismissed"})
     return jsonify({"error": "Failed to dismiss suggestion"}), 400
+
+
+# =========================================================================
+# SETTINGS / USAGE / INTEGRATIONS
+# =========================================================================
+
+@ai_ops_bp.route("/settings", methods=["GET", "POST"])
+@ai_ops_auth_required
+def settings():
+    user = get_current_ai_ops_user()
+    tenant = g.tenant
+    if request.method == "POST":
+        from app.services.tenant_service import update_tenant
+        update_tenant(tenant.id, {
+            "app_name": request.form.get("app_name", tenant.app_name),
+            "app_url": request.form.get("app_url", tenant.app_url),
+            "app_description": request.form.get("app_description", tenant.app_description),
+            "notification_emails": [e.strip() for e in request.form.get("notification_emails", "").split(",") if e.strip()],
+        })
+        flash("Settings saved", "success")
+        return redirect(url_for("ai_ops.settings"))
+    return render_template("ai_ops/settings.html", user=user, tenant=tenant)
+
+
+@ai_ops_bp.route("/usage")
+@ai_ops_auth_required
+def usage():
+    user = get_current_ai_ops_user()
+    tenant = g.tenant
+    from app.services.usage_service import get_monthly_summary
+    summary = get_monthly_summary(tenant.id)
+    svc = get_service()
+    records = svc.supabase.table("usage_records") \
+        .select("*") \
+        .eq("tenant_id", tenant.id) \
+        .order("created_at", desc=True) \
+        .limit(50) \
+        .execute()
+    return render_template("ai_ops/usage.html", user=user, tenant=tenant,
+        usage={**summary, "monthly_fix_limit": tenant.monthly_fix_limit, "monthly_feature_limit": tenant.monthly_feature_limit},
+        records=records.data or [])
+
+
+@ai_ops_bp.route("/integrations")
+@ai_ops_auth_required
+def integrations():
+    user = get_current_ai_ops_user()
+    tenant = g.tenant
+    svc = get_service()
+    webhooks = svc.supabase.table("webhooks") \
+        .select("*") \
+        .eq("tenant_id", tenant.id) \
+        .execute()
+    api_keys = svc.supabase.table("tenant_api_keys") \
+        .select("id, name, key_prefix, scopes, created_at, last_used_at") \
+        .eq("tenant_id", tenant.id) \
+        .execute()
+    return render_template("ai_ops/integrations.html", user=user, tenant=tenant,
+        webhooks=webhooks.data or [], api_keys=api_keys.data or [],
+        saas_domain=config.SAAS_DOMAIN,
+        api_key=tenant.api_key_prefix + "...")

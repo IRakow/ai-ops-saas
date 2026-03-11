@@ -57,7 +57,14 @@ log = logging.getLogger("ai_ops.worker")
 # App imports (after dotenv and path setup)
 # ---------------------------------------------------------------------------
 
+from contextlib import contextmanager
+
 from app.services.ai_ops_service import AIOpsService
+from app.tenant import load_tenant, TenantConfig
+from app.services.git_service import sync_workspace, commit_and_push
+from app.services.usage_service import start_usage_record, complete_usage_record, fail_usage_record, check_limits
+from app.services.webhook_service import deliver_event
+from app.supabase_client import get_supabase_client
 import config
 
 # ---------------------------------------------------------------------------
@@ -145,6 +152,49 @@ NOTIFY_PHONES = config.NOTIFICATION_PHONES
 
 DEFAULT_EMAILS = ",".join(config.NOTIFICATION_EMAILS) if config.NOTIFICATION_EMAILS else ""
 NOTIFY_EMAILS = config.NOTIFICATION_EMAILS
+
+# ---------------------------------------------------------------------------
+# Multi-Tenant Context
+# ---------------------------------------------------------------------------
+
+
+@contextmanager
+def tenant_context(tenant: TenantConfig):
+    """Set up environment for a specific tenant's agent run."""
+    original_env = os.environ.copy()
+    try:
+        os.environ["WORKING_DIR"] = tenant.workspace_path
+        os.environ["APP_NAME"] = tenant.app_name or tenant.name
+        os.environ["APP_BASE_URL"] = tenant.app_url or ""
+        yield tenant
+    finally:
+        os.environ.clear()
+        os.environ.update(original_env)
+
+
+def _poll_queue_fair():
+    """Pick next task, rotating between tenants."""
+    sb = get_supabase_client()
+    tasks = sb.table("ai_ops_agent_queue") \
+        .select("*, tenants!inner(status, slug, workspace_path)") \
+        .eq("status", "pending") \
+        .eq("tenants.status", "active") \
+        .order("created_at") \
+        .limit(1) \
+        .execute()
+
+    if not tasks.data:
+        # Also check trial tenants
+        tasks = sb.table("ai_ops_agent_queue") \
+            .select("*, tenants!inner(status, slug)") \
+            .eq("status", "pending") \
+            .eq("tenants.status", "trial") \
+            .order("created_at") \
+            .limit(1) \
+            .execute()
+
+    return tasks.data[0] if tasks.data else None
+
 
 # Gate detection patterns
 GATE_PATTERNS = [
@@ -719,14 +769,17 @@ def _trigger_auto_deploy(bug_svc, bug):
 # ---------------------------------------------------------------------------
 
 
-def build_prompt(task_type, description, attachments=None):
+def build_prompt(task_type, description, attachments=None, tenant=None):
     """Build the full prompt for the Claude Code agent.
 
     Args:
         task_type: "bug" or "feature"
         description: The task description from the queue item.
         attachments: List of GCS URLs or file references (from JSONB field).
+        tenant: Optional TenantConfig for multi-tenant operation.
     """
+    effective_working_dir = tenant.workspace_path if tenant else WORKING_DIR
+
     # Read the protocol file
     protocol = ""
     try:
@@ -788,7 +841,7 @@ def build_prompt(task_type, description, attachments=None):
         fix_context=fix_context,
         instruction=instruction,
         protocol=protocol,
-        working_dir=WORKING_DIR,
+        working_dir=effective_working_dir,
     )
     return prompt
 
@@ -953,11 +1006,14 @@ SPECIALIST_ROLES = {
 }
 
 
-def build_specialist_prompt(role, task_type, description, attachments=None):
+def build_specialist_prompt(role, task_type, description, attachments=None,
+                            tenant=None):
     """Build prompt for an understanding-phase specialist agent."""
     spec = SPECIALIST_ROLES[role]
     mode = "Bug Fix" if task_type == "bug" else "New Feature"
     attachment_text = _format_attachments(attachments)
+    effective_working_dir = tenant.workspace_path if tenant else WORKING_DIR
+    effective_context = tenant.get_context() if tenant else config.get_codebase_context()
 
     return (
         "## MODE: ANALYSIS ONLY — DO NOT MAKE ANY CHANGES\n"
@@ -1002,14 +1058,16 @@ def build_specialist_prompt(role, task_type, description, attachments=None):
         description=description,
         attachment_text=attachment_text,
         instructions=spec["instructions"],
-        app_description=config.get_codebase_context(),
-        working_dir=WORKING_DIR,
+        app_description=effective_context,
+        working_dir=effective_working_dir,
     )
 
 
-def build_consolidator_prompt(task_type, description, specialist_outputs):
+def build_consolidator_prompt(task_type, description, specialist_outputs,
+                              tenant=None):
     """Build prompt for the consolidator that merges all specialist outputs."""
     mode = "Bug Fix" if task_type == "bug" else "New Feature"
+    effective_working_dir = tenant.workspace_path if tenant else WORKING_DIR
 
     separator = "=" * 60
     specialist_text = ""
@@ -1084,15 +1142,18 @@ def build_consolidator_prompt(task_type, description, specialist_outputs):
         mode=mode,
         description=description,
         specialist_text=specialist_text,
-        working_dir=WORKING_DIR,
+        working_dir=effective_working_dir,
     )
 
 
 # --- Execution Phase Prompt Builders ---
 
 
-def build_implementer_prompt(task_type, description, attachments, understanding_output):
+def build_implementer_prompt(task_type, description, attachments, understanding_output,
+                             tenant=None):
     """Build prompt for the Implementer agent with full analysis context."""
+    effective_working_dir = tenant.workspace_path if tenant else WORKING_DIR
+
     # Read the protocol file
     protocol = ""
     try:
@@ -1167,12 +1228,14 @@ def build_implementer_prompt(task_type, description, attachments, understanding_
         fix_context=fix_context,
         instruction=instruction,
         protocol=protocol,
-        working_dir=WORKING_DIR,
+        working_dir=effective_working_dir,
     )
 
 
-def build_tester_prompt(description, commit_sha, files_changed, regression_checkpoints):
+def build_tester_prompt(description, commit_sha, files_changed, regression_checkpoints,
+                        tenant=None):
     """Build prompt for the Regression Tester agent."""
+    effective_working_dir = tenant.workspace_path if tenant else WORKING_DIR
     return (
         "## ROLE: Regression Tester\n"
         "## MISSION: Try to BREAK the fix\n"
@@ -1229,12 +1292,14 @@ def build_tester_prompt(description, commit_sha, files_changed, regression_check
         soak_email=SOAK_CHECK_EMAIL,
         soak_password=SOAK_CHECK_PASSWORD,
         error_log=config.ERROR_LOG_PATH,
-        working_dir=WORKING_DIR,
+        working_dir=effective_working_dir,
     )
 
 
-def build_supabase_validator_prompt(description, commit_sha, files_changed):
+def build_supabase_validator_prompt(description, commit_sha, files_changed,
+                                    tenant=None):
     """Build prompt for the Supabase Validator agent."""
+    effective_working_dir = tenant.workspace_path if tenant else WORKING_DIR
     return (
         "## ROLE: Supabase Validator\n"
         "## MISSION: Verify database integrity after the fix\n"
@@ -1273,7 +1338,7 @@ def build_supabase_validator_prompt(description, commit_sha, files_changed):
         description=description,
         sha=commit_sha or "(unknown)",
         files=files_changed or "(unknown)",
-        working_dir=WORKING_DIR,
+        working_dir=effective_working_dir,
     )
 
 
@@ -1315,8 +1380,10 @@ def _extract_assessor_context(impl_output):
 
 def build_assessor_prompt(description, impl_output, tester_output,
                           validator_output, soak_result,
-                          browser_smoke_result="", browser_tester_output=""):
+                          browser_smoke_result="", browser_tester_output="",
+                          tenant=None):
     """Build prompt for the Final Assessor agent."""
+    effective_working_dir = tenant.workspace_path if tenant else WORKING_DIR
     assessor_context = _extract_assessor_context(impl_output)
 
     return (
@@ -1392,12 +1459,15 @@ def build_assessor_prompt(description, impl_output, tester_output,
         browser_tester_output=browser_tester_output or "(browser tester did not run)",
         test_base_url=config.TEST_BASE_URL,
         error_log=config.ERROR_LOG_PATH,
-        working_dir=WORKING_DIR,
+        working_dir=effective_working_dir,
     )
 
 
-def build_fixer_prompt(description, impl_output, tester_findings, validator_findings):
+def build_fixer_prompt(description, impl_output, tester_findings, validator_findings,
+                       tenant=None):
     """Build prompt for the Fixer agent (runs only if regression detected)."""
+    effective_working_dir = tenant.workspace_path if tenant else WORKING_DIR
+
     # Read the protocol file
     protocol = ""
     try:
@@ -1449,7 +1519,7 @@ def build_fixer_prompt(description, impl_output, tester_findings, validator_find
         tester_findings=tester_findings or "(none)",
         validator_findings=validator_findings or "(none)",
         protocol=protocol,
-        working_dir=WORKING_DIR,
+        working_dir=effective_working_dir,
     )
 
 
@@ -1846,7 +1916,7 @@ def _deploy_to_production(svc, session_id, commit_sha: str) -> tuple[bool, str]:
 
 
 def run_agent_streaming(svc, session_id, queue_id, prompt,
-                        max_turns=None, timeout=None):
+                        max_turns=None, timeout=None, working_dir=None):
     """Invoke Claude Code agent with line-by-line output streaming.
 
     Streams gate progress to Supabase messages so the web UI can poll.
@@ -1857,6 +1927,7 @@ def run_agent_streaming(svc, session_id, queue_id, prompt,
     """
     max_turns = max_turns or IMPLEMENTER_MAX_TURNS
     timeout = timeout or AGENT_TIMEOUT
+    effective_cwd = working_dir or WORKING_DIR
 
     cmd = [
         "claude", "--print",
@@ -1897,7 +1968,7 @@ def run_agent_streaming(svc, session_id, queue_id, prompt,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            cwd=WORKING_DIR,
+            cwd=effective_cwd,
             env=env,
         )
 
@@ -2060,7 +2131,7 @@ def run_agent_streaming(svc, session_id, queue_id, prompt,
 
 
 def run_agent_single(prompt, model=None, max_turns=25, timeout=180,
-                     allowed_tools="Bash,Read,Glob,Grep"):
+                     allowed_tools="Bash,Read,Glob,Grep", working_dir=None):
     """Run a single non-streaming Claude agent and capture stdout.
 
     Used for shorter agents (specialists, tester, validator, assessor).
@@ -2068,6 +2139,7 @@ def run_agent_single(prompt, model=None, max_turns=25, timeout=180,
     Returns dict with: success, stdout, stderr, elapsed_seconds, timed_out.
     """
     model = model or AGENT_MODEL
+    effective_cwd = working_dir or WORKING_DIR
     cmd = [
         "claude", "--print",
         "--model", model,
@@ -2092,7 +2164,7 @@ def run_agent_single(prompt, model=None, max_turns=25, timeout=180,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
-                cwd=WORKING_DIR,
+                cwd=effective_cwd,
                 env=env,
             )
             elapsed = int(time.monotonic() - start_time)
@@ -2157,7 +2229,7 @@ def run_agent_single(prompt, model=None, max_turns=25, timeout=180,
     }
 
 
-def run_parallel_agents(agent_configs):
+def run_parallel_agents(agent_configs, working_dir=None):
     """Run 2-4 agents concurrently via Popen, collect all outputs.
 
     Args:
@@ -2168,9 +2240,11 @@ def run_parallel_agents(agent_configs):
             - max_turns: int
             - timeout: int (seconds)
             - allowed_tools: str
+        working_dir: Optional override for the working directory.
 
     Returns: dict mapping name -> result dict (same shape as run_agent_single).
     """
+    effective_cwd = working_dir or WORKING_DIR
     env = os.environ.copy()
     env["CI"] = "true"
     env["TERM"] = "dumb"
@@ -2200,7 +2274,7 @@ def run_parallel_agents(agent_configs):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                cwd=WORKING_DIR,
+                cwd=effective_cwd,
                 env=env,
             )
             processes[name] = proc
@@ -2414,7 +2488,7 @@ def verdict_to_status(verdict_dict):
 # ---------------------------------------------------------------------------
 
 
-def process_understanding(svc, item):
+def process_understanding(svc, item, tenant=None):
     """Run multi-agent understanding phase: 4 parallel specialists + 1 consolidator."""
     queue_id = item["id"]
     session_id = item["session_id"]
@@ -2475,6 +2549,18 @@ def process_understanding(svc, item):
 
     phase_start = time.monotonic()
     agent_team_log = []
+    effective_working_dir = tenant.workspace_path if tenant else WORKING_DIR
+
+    # Sync tenant workspace before running agents
+    if tenant:
+        try:
+            sync_workspace(tenant)
+            log.info("Workspace synced for tenant %s", tenant.slug)
+        except Exception as e:
+            log.error("Workspace sync failed for tenant %s: %s", tenant.slug, e)
+            svc.add_message(session_id, "system", "Worker",
+                            f"Workspace sync failed: {e}",
+                            message_type="error")
 
     # === Phase 1: Run 5 specialists in batches (3+2) ===
     all_roles = ["route_tracer", "service_analyst", "security_analyst", "frontend_inspector", "supabase_specialist"]
@@ -2490,7 +2576,8 @@ def process_understanding(svc, item):
         for role in batch_roles:
             batch_configs.append({
                 "name": role,
-                "prompt": build_specialist_prompt(role, task_type, description, attachments),
+                "prompt": build_specialist_prompt(role, task_type, description, attachments,
+                                                  tenant=tenant),
                 "model": AGENT_MODEL,
                 "max_turns": SPECIALIST_MAX_TURNS,
                 "timeout": SPECIALIST_TIMEOUT,
@@ -2507,7 +2594,7 @@ def process_understanding(svc, item):
             message_type="status_update",
         )
 
-        batch_results = run_parallel_agents(batch_configs)
+        batch_results = run_parallel_agents(batch_configs, working_dir=effective_working_dir)
         specialist_results.update(batch_results)
 
     # Collect outputs from all batches
@@ -2550,6 +2637,7 @@ def process_understanding(svc, item):
     if specialist_outputs:
         consolidator_prompt = build_consolidator_prompt(
             task_type, description, specialist_outputs,
+            tenant=tenant,
         )
 
         log.info("Starting consolidator agent...")
@@ -2559,6 +2647,7 @@ def process_understanding(svc, item):
             max_turns=CONSOLIDATOR_MAX_TURNS,
             timeout=CONSOLIDATOR_TIMEOUT,
             allowed_tools="Bash,Read,Glob,Grep",
+            working_dir=effective_working_dir,
         )
 
         understanding = consolidator_result.get("stdout", "").strip()
@@ -2705,7 +2794,7 @@ def process_understanding(svc, item):
 # ---------------------------------------------------------------------------
 
 
-def process_execution_multi(svc, item, understanding_output=None):
+def process_execution_multi(svc, item, understanding_output=None, tenant=None):
     """Run multi-agent execution: Implementer → Tester → Validator → Assessor (+ Fixer)."""
     queue_id = item["id"]
     session_id = item["session_id"]
@@ -2713,6 +2802,7 @@ def process_execution_multi(svc, item, understanding_output=None):
     description = item.get("description", "")
     attachments = item.get("attachments") or []
     task_label = "Bug Fix" if task_type == "bug" else "New Feature"
+    effective_working_dir = tenant.workspace_path if tenant else WORKING_DIR
 
     log.info(
         "Execution phase (multi-agent): queue_id=%s, session_id=%s, type=%s",
@@ -2735,6 +2825,28 @@ def process_execution_multi(svc, item, understanding_output=None):
     except Exception as e:
         log.error("Failed to mark task as running: %s", e)
         return
+
+    # --- Sync tenant workspace ---
+    if tenant:
+        try:
+            sync_workspace(tenant)
+            log.info("Workspace synced for tenant %s", tenant.slug)
+        except Exception as e:
+            log.error("Workspace sync failed for tenant %s: %s", tenant.slug, e)
+            svc.add_message(session_id, "system", "Worker",
+                            f"Workspace sync failed: {e}",
+                            message_type="error")
+
+    # --- Start usage record ---
+    usage_record_id = None
+    tenant_id = item.get("tenant_id")
+    if tenant_id:
+        try:
+            record_type = "feature" if task_type == "feature" else "bug_fix"
+            usage_record_id = start_usage_record(tenant_id, session_id, record_type)
+            log.info("Usage record started: %s", usage_record_id)
+        except Exception as e:
+            log.warning("Failed to start usage record: %s", e)
 
     # --- Pre-task git validation ---
     git_ok, git_output = run_git_validate()
@@ -2791,13 +2903,15 @@ def process_execution_multi(svc, item, understanding_output=None):
         if understanding_output:
             prompt = build_implementer_prompt(
                 task_type, description, attachments, understanding_output,
+                tenant=tenant,
             )
         else:
-            prompt = build_prompt(task_type, description, attachments)
+            prompt = build_prompt(task_type, description, attachments, tenant=tenant)
 
         result = run_agent_streaming(
             svc, session_id, queue_id, prompt,
             max_turns=IMPLEMENTER_MAX_TURNS, timeout=timeout_val,
+            working_dir=effective_working_dir,
         )
         stdout = result.get("stdout", "")
         parsed = parse_result(stdout)
@@ -3072,9 +3186,11 @@ def process_execution_multi(svc, item, understanding_output=None):
 
     tester_prompt = build_tester_prompt(
         description, commit_sha, files_changed, regression_checkpoints,
+        tenant=tenant,
     )
     validator_prompt = build_supabase_validator_prompt(
         description, commit_sha, files_changed,
+        tenant=tenant,
     )
 
     parallel_results = run_parallel_agents([
@@ -3094,7 +3210,7 @@ def process_execution_multi(svc, item, understanding_output=None):
             "timeout": SUPABASE_VALIDATOR_TIMEOUT,
             "allowed_tools": "Bash,Read,Glob,Grep",
         },
-    ])
+    ], working_dir=effective_working_dir)
 
     # Process Tester results
     tester_result = parallel_results.get("regression_tester", {})
@@ -3702,23 +3818,54 @@ def _finalize_execution(svc, session_id, queue_id, description, task_label,
 
 def process_task(svc, item):
     """Process a single queue item — dispatch to understanding or execution phase."""
+    session_id = item["session_id"]
+    queue_id = item["id"]
     phase = item.get("phase", "execute")
 
+    # --- Load tenant context ---
+    tenant_id = item.get("tenant_id")
+    tenant = None
+    if tenant_id:
+        try:
+            tenant = load_tenant(tenant_id)
+        except Exception as e:
+            log.error("Failed to load tenant %s: %s", tenant_id, e)
+
+        if tenant and tenant.status in ("suspended", "cancelled"):
+            log.warning("Skipping task %s — tenant %s is %s", queue_id, tenant.slug, tenant.status)
+            svc.update_queue_item(queue_id, status="failed",
+                                  result_summary=f"Tenant {tenant.status}")
+            return
+
+        # Check usage limits
+        if tenant:
+            task_type = item.get("task_type", "bug")
+            record_type = "feature" if task_type == "feature" else "bug_fix"
+            allowed, reason = check_limits(tenant_id, record_type)
+            if not allowed:
+                log.warning("Usage limit reached for tenant %s: %s", tenant.slug, reason)
+                svc.update_queue_item(queue_id, status="failed",
+                                      result_summary=f"Limit reached: {reason}")
+                svc.add_message(session_id, "system", "Worker",
+                                f"Task skipped: {reason}",
+                                message_type="error")
+                return
+
     if phase == "understand":
-        return process_understanding(svc, item)
+        return process_understanding(svc, item, tenant=tenant)
 
     # === EXECUTION PHASE (multi-agent) ===
     # Get understanding_output from queue item or session
     understanding_output = item.get("understanding_output") or ""
     if not understanding_output:
         try:
-            sess = svc.get_session(item["session_id"])
+            sess = svc.get_session(session_id)
             if sess:
                 understanding_output = sess.get("understanding_output") or ""
         except Exception:
             pass
 
-    return process_execution_multi(svc, item, understanding_output)
+    return process_execution_multi(svc, item, understanding_output, tenant=tenant)
 
 
 def _send_notifications(parsed, result, task_label, description, summary,

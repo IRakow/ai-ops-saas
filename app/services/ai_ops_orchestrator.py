@@ -96,7 +96,7 @@ class AIOpsOrchestrator:
                 logger.error(f"Poll loop error: {e}", exc_info=True)
             time.sleep(interval)
 
-    def _process_pending_sessions(self):
+    def _process_pending_sessions(self, tenant_id=None):
         """Find sessions that need agent attention and process them."""
         # Look for sessions in actionable states
         actionable_states = ["gathering_info", "planning", "coding", "testing", "deploying_staging"]
@@ -105,12 +105,14 @@ class AIOpsOrchestrator:
             try:
                 from app.supabase_client import get_supabase_client
                 supabase = get_supabase_client()
-                result = supabase.table("ai_ops_sessions") \
+                query = supabase.table("ai_ops_sessions") \
                     .select("*") \
                     .eq("status", state) \
                     .order("updated_at", desc=False) \
-                    .limit(1) \
-                    .execute()
+                    .limit(1)
+                if tenant_id:
+                    query = query.eq("tenant_id", tenant_id)
+                result = query.execute()
 
                 if result.data:
                     session = result.data[0]

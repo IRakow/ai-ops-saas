@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pricing - AI Ops</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f0f1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 60px 20px;
+        }
+        .container { max-width: 1100px; margin: 0 auto; }
+        h1 {
+            text-align: center;
+            font-size: 2.2rem;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+        h1 span { color: #00d4aa; }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            font-size: 1.05rem;
+            margin-bottom: 50px;
+        }
+
+        .plans {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 60px;
+        }
+        .plan {
+            background: #1a1a2e;
+            border: 2px solid #2a2a3e;
+            border-radius: 14px;
+            padding: 32px 24px;
+            text-align: center;
+            position: relative;
+            transition: border-color 0.2s, transform 0.2s;
+        }
+        .plan:hover { transform: translateY(-4px); }
+        .plan.featured { border-color: #00d4aa; }
+        .plan.featured::before {
+            content: "Most Popular";
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #00d4aa;
+            color: #0f0f1a;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 4px 14px;
+            border-radius: 20px;
+            text-transform: uppercase;
+        }
+        .plan h3 { font-size: 1.15rem; color: #fff; margin-bottom: 12px; }
+        .plan .price {
+            font-size: 2.4rem;
+            font-weight: 700;
+            color: #00d4aa;
+            margin-bottom: 4px;
+        }
+        .plan .price small { font-size: 0.85rem; color: #888; font-weight: 400; }
+        .plan .period { font-size: 0.85rem; color: #666; margin-bottom: 20px; }
+        .plan ul {
+            list-style: none;
+            text-align: left;
+            margin-bottom: 24px;
+        }
+        .plan ul li {
+            padding: 6px 0;
+            font-size: 0.9rem;
+            color: #bbb;
+            border-bottom: 1px solid #222;
+        }
+        .plan ul li:last-child { border-bottom: none; }
+        .plan ul li::before {
+            content: "\2713";
+            color: #00d4aa;
+            margin-right: 8px;
+            font-weight: 700;
+        }
+        .plan .overage {
+            font-size: 0.8rem;
+            color: #666;
+            margin-bottom: 20px;
+        }
+        .plan .cta {
+            display: inline-block;
+            padding: 12px 28px;
+            background: transparent;
+            border: 2px solid #00d4aa;
+            color: #00d4aa;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: background 0.2s, color 0.2s;
+        }
+        .plan .cta:hover, .plan.featured .cta {
+            background: #00d4aa;
+            color: #0f0f1a;
+        }
+        .plan.featured .cta:hover { background: #00b894; }
+
+        .comparison { margin-top: 20px; }
+        .comparison h2 {
+            text-align: center;
+            font-size: 1.5rem;
+            color: #fff;
+            margin-bottom: 24px;
+        }
+        .comparison table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        .comparison th, .comparison td {
+            padding: 12px 16px;
+            text-align: center;
+            border-bottom: 1px solid #1a1a2e;
+        }
+        .comparison th {
+            color: #00d4aa;
+            font-weight: 600;
+            background: #12121e;
+        }
+        .comparison th:first-child, .comparison td:first-child { text-align: left; }
+        .comparison td { color: #bbb; }
+        .comparison tr:hover td { background: #14142a; }
+        .check { color: #00d4aa; }
+        .dash { color: #444; }
+
+        @media (max-width: 900px) {
+            .plans { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 550px) {
+            .plans { grid-template-columns: 1fr; }
+            .comparison { overflow-x: auto; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1><span>AI</span> Ops Pricing</h1>
+        <p class="subtitle">Automated bug detection and fixing. Pay for what you need.</p>
+
+        <div class="plans">
+            <div class="plan">
+                <h3>Trial</h3>
+                <div class="price">Free</div>
+                <div class="period">14 days</div>
+                <ul>
+                    <li>5 bug fixes included</li>
+                    <li>1 monitored app</li>
+                    <li>Daily scans</li>
+                    <li>Email notifications</li>
+                </ul>
+                <div class="overage">No overages</div>
+                <a href="/signup" class="cta">Start Trial</a>
+            </div>
+
+            <div class="plan">
+                <h3>Starter</h3>
+                <div class="price">$299<small>/mo</small></div>
+                <div class="period">billed monthly</div>
+                <ul>
+                    <li>25 bug fixes/month</li>
+                    <li>3 monitored apps</li>
+                    <li>Hourly scans</li>
+                    <li>Email + Slack notifications</li>
+                    <li>GitHub PR integration</li>
+                </ul>
+                <div class="overage">Overage: $15/fix</div>
+                <a href="/signup" class="cta">Get Started</a>
+            </div>
+
+            <div class="plan featured">
+                <h3>Pro</h3>
+                <div class="price">$799<small>/mo</small></div>
+                <div class="period">billed monthly</div>
+                <ul>
+                    <li>100 bug fixes/month</li>
+                    <li>10 monitored apps</li>
+                    <li>Continuous scans</li>
+                    <li>All notification channels</li>
+                    <li>Priority agent queue</li>
+                    <li>Custom scan rules</li>
+                </ul>
+                <div class="overage">Overage: $10/fix</div>
+                <a href="/signup" class="cta">Get Started</a>
+            </div>
+
+            <div class="plan">
+                <h3>Enterprise</h3>
+                <div class="price">$1,999<small>/mo</small></div>
+                <div class="period">billed monthly</div>
+                <ul>
+                    <li>Unlimited bug fixes</li>
+                    <li>Unlimited apps</li>
+                    <li>Continuous scans</li>
+                    <li>Dedicated agent pool</li>
+                    <li>SSO & audit logs</li>
+                    <li>SLA guarantee</li>
+                    <li>Onboarding support</li>
+                </ul>
+                <div class="overage">No overages</div>
+                <a href="/signup" class="cta">Contact Us</a>
+            </div>
+        </div>
+
+        <div class="comparison">
+            <h2>Feature Comparison</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Feature</th>
+                        <th>Trial</th>
+                        <th>Starter</th>
+                        <th>Pro</th>
+                        <th>Enterprise</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Bug fixes/month</td>
+                        <td>5</td>
+                        <td>25</td>
+                        <td>100</td>
+                        <td>Unlimited</td>
+                    </tr>
+                    <tr>
+                        <td>Monitored apps</td>
+                        <td>1</td>
+                        <td>3</td>
+                        <td>10</td>
+                        <td>Unlimited</td>
+                    </tr>
+                    <tr>
+                        <td>Scan frequency</td>
+                        <td>Daily</td>
+                        <td>Hourly</td>
+                        <td>Continuous</td>
+                        <td>Continuous</td>
+                    </tr>
+                    <tr>
+                        <td>Email notifications</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Slack notifications</td>
+                        <td class="dash">&#8212;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>GitHub PR integration</td>
+                        <td class="dash">&#8212;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Custom scan rules</td>
+                        <td class="dash">&#8212;</td>
+                        <td class="dash">&#8212;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Priority queue</td>
+                        <td class="dash">&#8212;</td>
+                        <td class="dash">&#8212;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Dedicated agent pool</td>
+                        <td class="dash">&#8212;</td>
+                        <td class="dash">&#8212;</td>
+                        <td class="dash">&#8212;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>SSO & audit logs</td>
+                        <td class="dash">&#8212;</td>
+                        <td class="dash">&#8212;</td>
+                        <td class="dash">&#8212;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>SLA guarantee</td>
+                        <td class="dash">&#8212;</td>
+                        <td class="dash">&#8212;</td>
+                        <td class="dash">&#8212;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Overage rate</td>
+                        <td class="dash">&#8212;</td>
+                        <td>$15/fix</td>
+                        <td>$10/fix</td>
+                        <td class="dash">&#8212;</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

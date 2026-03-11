@@ -1,0 +1,159 @@
+{% extends "ai_ops/base_ai_ops.html" %}
+
+{% block title %}Integrations{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h2 class="fw-bold mb-4"><i class="fas fa-plug"></i> Integrations</h2>
+
+    <!-- Bug Intake JS Snippet -->
+    <div class="card mb-4">
+        <div class="card-header fw-bold"><i class="fas fa-code me-2"></i>Bug Intake Widget</div>
+        <div class="card-body">
+            <p class="text-muted mb-3">
+                Add this snippet to your app's HTML to enable automatic bug detection and the report button.
+                Paste it before the closing <code>&lt;/body&gt;</code> tag.
+            </p>
+            <div class="position-relative">
+                <pre class="bg-dark text-light p-3 rounded" style="font-size: 0.85rem; overflow-x: auto;"><code id="snippet-code">&lt;!-- AI Ops Bug Detection --&gt;
+&lt;link rel="stylesheet" href="https://{{ saas_domain }}/static/css/bug-intake.css"&gt;
+&lt;script&gt;
+  window.AI_OPS_CONFIG = {
+    endpoint: "https://{{ saas_domain }}/api/v1/intake",
+    apiKey: "{{ api_key }}",
+    appName: "{{ tenant.app_name or 'Your App' }}"
+  };
+&lt;/script&gt;
+&lt;script src="https://{{ saas_domain }}/static/js/bug-intake.js"&gt;&lt;/script&gt;</code></pre>
+                <button class="btn btn-sm btn-outline-light position-absolute top-0 end-0 m-2"
+                        onclick="navigator.clipboard.writeText(document.getElementById('snippet-code').textContent).then(function(){this.textContent='Copied!'}.bind(this))">
+                    <i class="fas fa-copy me-1"></i> Copy
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Keys -->
+    <div class="card mb-4">
+        <div class="card-header fw-bold"><i class="fas fa-key me-2"></i>API Keys</div>
+        <div class="card-body">
+            {% if api_keys %}
+            <div class="table-responsive mb-3">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Key Prefix</th>
+                            <th>Scopes</th>
+                            <th>Created</th>
+                            <th>Last Used</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for key in api_keys %}
+                        <tr>
+                            <td>{{ key.name or 'Default' }}</td>
+                            <td><code>{{ key.key_prefix }}...</code></td>
+                            <td>
+                                {% for scope in (key.scopes or []) %}
+                                <span class="badge bg-secondary bg-opacity-25 text-dark me-1">{{ scope }}</span>
+                                {% endfor %}
+                            </td>
+                            <td class="text-muted">{{ key.created_at[:10] if key.created_at else '—' }}</td>
+                            <td class="text-muted">{{ key.last_used_at[:10] if key.last_used_at else 'Never' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted mb-3">No API keys yet. Generate one from <a href="{{ url_for('ai_ops.settings') }}">Settings</a>.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Webhooks -->
+    <div class="card mb-4">
+        <div class="card-header fw-bold"><i class="fas fa-satellite-dish me-2"></i>Webhooks</div>
+        <div class="card-body">
+            <p class="text-muted mb-3">
+                Receive POST notifications when bugs are detected, fixes deployed, or sessions complete.
+            </p>
+            {% if webhooks %}
+            <div class="table-responsive mb-3">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>URL</th>
+                            <th>Events</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for wh in webhooks %}
+                        <tr>
+                            <td class="text-truncate" style="max-width: 300px;">
+                                <code>{{ wh.url }}</code>
+                            </td>
+                            <td>
+                                {% for evt in (wh.events or []) %}
+                                <span class="badge bg-info bg-opacity-10 text-info me-1">{{ evt }}</span>
+                                {% endfor %}
+                            </td>
+                            <td>
+                                <span class="badge bg-{{ 'success' if wh.active else 'secondary' }}">
+                                    {{ 'Active' if wh.active else 'Disabled' }}
+                                </span>
+                            </td>
+                            <td class="text-muted">{{ wh.created_at[:10] if wh.created_at else '—' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted mb-3">No webhooks configured.</p>
+            {% endif %}
+
+            <h6 class="fw-bold mt-4 mb-3">Add Webhook</h6>
+            <form method="POST" action="{{ url_for('ai_ops.save_settings') }}" class="row g-2 align-items-end">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="add_webhook">
+                <div class="col-md-6">
+                    <label class="form-label small">Webhook URL</label>
+                    <input type="url" class="form-control form-control-sm" name="webhook_url"
+                           placeholder="https://your-server.com/webhook" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small">Events</label>
+                    <select class="form-select form-select-sm" name="webhook_events" multiple>
+                        <option value="bug.detected" selected>Bug Detected</option>
+                        <option value="fix.deployed" selected>Fix Deployed</option>
+                        <option value="session.completed" selected>Session Completed</option>
+                        <option value="session.failed">Session Failed</option>
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-plus me-1"></i> Add
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- API Docs Link -->
+    <div class="card">
+        <div class="card-body d-flex align-items-center">
+            <div class="me-auto">
+                <h6 class="fw-bold mb-1"><i class="fas fa-book me-2"></i>API Documentation</h6>
+                <span class="text-muted small">REST API for programmatic bug submission, status polling, and webhook management.</span>
+            </div>
+            <a href="/api/v1/docs" class="btn btn-sm btn-outline-primary">
+                <i class="fas fa-external-link-alt me-1"></i> View Docs
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

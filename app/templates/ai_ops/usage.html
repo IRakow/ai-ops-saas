@@ -1,0 +1,134 @@
+{% extends "ai_ops/base_ai_ops.html" %}
+
+{% block title %}Usage{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h2 class="fw-bold mb-4"><i class="fas fa-chart-bar"></i> Usage</h2>
+
+    <!-- Current Month Stats -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="fw-bold mb-0"><i class="fas fa-bug text-danger me-2"></i>Bug Fixes</h6>
+                        <span class="fw-bold">{{ usage.fixes_used }} / {{ usage.monthly_fix_limit }}</span>
+                    </div>
+                    {% set fix_pct = ((usage.fixes_used / usage.monthly_fix_limit) * 100) if usage.monthly_fix_limit else 0 %}
+                    <div class="progress" style="height: 12px;">
+                        <div class="progress-bar bg-danger {{ 'bg-warning' if fix_pct > 80 }}"
+                             role="progressbar"
+                             style="width: {{ [fix_pct, 100] | min }}%"
+                             aria-valuenow="{{ usage.fixes_used }}"
+                             aria-valuemin="0"
+                             aria-valuemax="{{ usage.monthly_fix_limit }}">
+                        </div>
+                    </div>
+                    <small class="text-muted mt-1 d-block">
+                        {{ usage.monthly_fix_limit - usage.fixes_used }} remaining this month
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="fw-bold mb-0"><i class="fas fa-lightbulb text-primary me-2"></i>Features</h6>
+                        <span class="fw-bold">{{ usage.features_used }} / {{ usage.monthly_feature_limit }}</span>
+                    </div>
+                    {% set feat_pct = ((usage.features_used / usage.monthly_feature_limit) * 100) if usage.monthly_feature_limit else 0 %}
+                    <div class="progress" style="height: 12px;">
+                        <div class="progress-bar bg-primary {{ 'bg-warning' if feat_pct > 80 }}"
+                             role="progressbar"
+                             style="width: {{ [feat_pct, 100] | min }}%"
+                             aria-valuenow="{{ usage.features_used }}"
+                             aria-valuemin="0"
+                             aria-valuemax="{{ usage.monthly_feature_limit }}">
+                        </div>
+                    </div>
+                    <small class="text-muted mt-1 d-block">
+                        {{ usage.monthly_feature_limit - usage.features_used }} remaining this month
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Plan Info -->
+    <div class="card mb-4">
+        <div class="card-body d-flex align-items-center">
+            <div class="me-auto">
+                <h6 class="fw-bold mb-1">
+                    <i class="fas fa-crown text-warning me-2"></i>
+                    {{ tenant.plan_name or 'Free' | title }} Plan
+                </h6>
+                <span class="text-muted small">
+                    {{ usage.monthly_fix_limit }} fixes + {{ usage.monthly_feature_limit }} features / month
+                </span>
+            </div>
+            <a href="#" class="btn btn-sm btn-outline-primary">Upgrade Plan</a>
+        </div>
+    </div>
+
+    <!-- Usage History -->
+    <div class="card">
+        <div class="card-header fw-bold"><i class="fas fa-history me-2"></i>Recent Usage</div>
+        <div class="card-body p-0">
+            {% if records %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Session</th>
+                            <th>Status</th>
+                            <th>Tokens</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in records %}
+                        <tr>
+                            <td class="text-muted">{{ r.created_at[:10] if r.created_at else '—' }}</td>
+                            <td>
+                                {% if r.usage_type == 'bug_fix' %}
+                                <span class="badge bg-danger bg-opacity-10 text-danger">Bug Fix</span>
+                                {% elif r.usage_type == 'feature' %}
+                                <span class="badge bg-primary bg-opacity-10 text-primary">Feature</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ r.usage_type or '—' }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if r.session_id %}
+                                <a href="{{ url_for('ai_ops.session_view', session_id=r.session_id) }}" class="text-decoration-none">
+                                    #{{ r.session_number or r.session_id[:8] }}
+                                </a>
+                                {% else %}
+                                —
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-{{ 'success' if r.status == 'completed' else ('danger' if r.status == 'failed' else 'secondary') }}">
+                                    {{ r.status or 'unknown' }}
+                                </span>
+                            </td>
+                            <td class="text-muted">{{ '{:,}'.format(r.tokens_used or 0) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5 text-muted">
+                <i class="fas fa-chart-line fa-2x mb-2 opacity-50"></i>
+                <p class="mb-0">No usage records yet.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

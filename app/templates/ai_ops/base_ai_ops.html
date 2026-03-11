@@ -23,6 +23,9 @@
                 <a class="nav-link" href="{{ url_for('ai_ops.history') }}">History</a>
                 <a class="nav-link" href="{{ url_for('ai_ops.notes_page') }}"><i class="fas fa-sticky-note"></i> Notes</a>
                 <a class="nav-link" href="{{ url_for('ai_ops.calculator') }}"><i class="fas fa-calculator"></i> Calculator</a>
+                <a class="nav-link" href="{{ url_for('ai_ops.usage') }}"><i class="fas fa-chart-bar"></i> Usage</a>
+                <a class="nav-link" href="{{ url_for('ai_ops.integrations') }}"><i class="fas fa-plug"></i> Integrations</a>
+                <a class="nav-link" href="{{ url_for('ai_ops.settings') }}"><i class="fas fa-cog"></i> Settings</a>
                 <span class="nav-link text-light opacity-75">
                     <i class="fas fa-user"></i> {{ session.get('ai_ops_user_name', 'User') }}
                 </span>

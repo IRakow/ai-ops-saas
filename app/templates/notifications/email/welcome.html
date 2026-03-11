@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"></head>
+<body style="margin:0; padding:0; background:#f4f4f7; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f7; padding:40px 20px;">
+        <tr>
+            <td align="center">
+                <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:8px; overflow:hidden;">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background:#0f0f1a; padding:24px 32px;">
+                            <span style="color:#00d4aa; font-size:1.2rem; font-weight:700;">AI Ops</span>
+                        </td>
+                    </tr>
+                    <!-- Body -->
+                    <tr>
+                        <td style="padding:32px;">
+                            <h2 style="margin:0 0 16px; color:#1a1a2e; font-size:1.3rem;">Welcome to AI Ops</h2>
+                            <p style="margin:0 0 16px; color:#555; font-size:0.95rem; line-height:1.6;">
+                                Hi {{ admin_name }},
+                            </p>
+                            <p style="margin:0 0 16px; color:#555; font-size:0.95rem; line-height:1.6;">
+                                Your account for <strong>{{ tenant_name }}</strong> is ready. AI Ops will monitor your web apps, detect bugs, and automatically fix them with pull requests you can review and merge.
+                            </p>
+                            <p style="margin:0 0 24px; color:#555; font-size:0.95rem; line-height:1.6;">
+                                Here's what to do next:
+                            </p>
+                            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+                                <tr>
+                                    <td style="padding:12px 16px; background:#f8f9fa; border-radius:6px 6px 0 0; border-bottom:1px solid #eee;">
+                                        <strong style="color:#00d4aa;">1.</strong>
+                                        <span style="color:#333; font-size:0.95rem; margin-left:8px;">Connect your GitHub repo in Settings</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:12px 16px; background:#f8f9fa; border-bottom:1px solid #eee;">
+                                        <strong style="color:#00d4aa;">2.</strong>
+                                        <span style="color:#333; font-size:0.95rem; margin-left:8px;">Add your app URL so we can start scanning</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:12px 16px; background:#f8f9fa; border-radius:0 0 6px 6px;">
+                                        <strong style="color:#00d4aa;">3.</strong>
+                                        <span style="color:#333; font-size:0.95rem; margin-left:8px;">Set up notifications (email, Slack, or both)</span>
+                                    </td>
+                                </tr>
+                            </table>
+                            <a href="{{ dashboard_url }}" style="display:inline-block; padding:12px 24px; background:#00d4aa; color:#0f0f1a; text-decoration:none; border-radius:6px; font-weight:600; font-size:0.95rem;">Go to Your Dashboard</a>
+                        </td>
+                    </tr>
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding:20px 32px; border-top:1px solid #eee;">
+                            <p style="margin:0; color:#aaa; font-size:0.8rem;">AI Ops - Automated Bug Detection & Fixing</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

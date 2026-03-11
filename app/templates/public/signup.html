@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up - AI Ops</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f0f1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .logo h1 {
+            font-size: 2rem;
+            color: #fff;
+            font-weight: 700;
+        }
+        .logo h1 span { color: #00d4aa; }
+        .logo p {
+            color: #888;
+            margin-top: 6px;
+            font-size: 0.95rem;
+        }
+        .plans {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            max-width: 900px;
+            width: 100%;
+            margin-bottom: 40px;
+        }
+        .plan-card {
+            background: #1a1a2e;
+            border: 2px solid #2a2a3e;
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.2s, transform 0.2s;
+        }
+        .plan-card:hover { border-color: #00d4aa; transform: translateY(-2px); }
+        .plan-card.selected { border-color: #00d4aa; background: #1a2a2e; }
+        .plan-card h3 { font-size: 1.1rem; color: #fff; margin-bottom: 8px; }
+        .plan-card .price { font-size: 1.8rem; font-weight: 700; color: #00d4aa; }
+        .plan-card .price small { font-size: 0.8rem; color: #888; font-weight: 400; }
+        .plan-card .detail { font-size: 0.85rem; color: #888; margin-top: 8px; }
+        .signup-form {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 36px;
+            max-width: 460px;
+            width: 100%;
+        }
+        .signup-form h2 {
+            font-size: 1.3rem;
+            color: #fff;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+        .form-group { margin-bottom: 18px; }
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            color: #aaa;
+            margin-bottom: 6px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px 14px;
+            background: #0f0f1a;
+            border: 1px solid #2a2a3e;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 0.95rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus { border-color: #00d4aa; }
+        .form-group input::placeholder { color: #555; }
+        .btn-submit {
+            width: 100%;
+            padding: 14px;
+            background: #00d4aa;
+            color: #0f0f1a;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 8px;
+        }
+        .btn-submit:hover { background: #00b894; }
+        .login-link {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 0.9rem;
+            color: #888;
+        }
+        .login-link a { color: #00d4aa; text-decoration: none; }
+        .login-link a:hover { text-decoration: underline; }
+        input[name="plan"] { display: none; }
+        @media (max-width: 600px) {
+            .plans { grid-template-columns: 1fr 1fr; }
+            body { padding: 20px 12px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="logo">
+        <h1><span>AI</span> Ops</h1>
+        <p>Automated bug detection and fixing for your web apps</p>
+    </div>
+
+    <div class="plans" id="planCards">
+        <div class="plan-card" data-plan="trial" onclick="selectPlan(this, 'trial')">
+            <h3>Trial</h3>
+            <div class="price">Free<small></small></div>
+            <div class="detail">14 days, 5 fixes included</div>
+        </div>
+        <div class="plan-card selected" data-plan="starter" onclick="selectPlan(this, 'starter')">
+            <h3>Starter</h3>
+            <div class="price">$299<small>/mo</small></div>
+            <div class="detail">25 fixes/month</div>
+        </div>
+        <div class="plan-card" data-plan="pro" onclick="selectPlan(this, 'pro')">
+            <h3>Pro</h3>
+            <div class="price">$799<small>/mo</small></div>
+            <div class="detail">100 fixes/month</div>
+        </div>
+        <div class="plan-card" data-plan="enterprise" onclick="selectPlan(this, 'enterprise')">
+            <h3>Enterprise</h3>
+            <div class="price">$1,999<small>/mo</small></div>
+            <div class="detail">Unlimited fixes</div>
+        </div>
+    </div>
+
+    <form class="signup-form" action="/onboarding/welcome" method="POST">
+        <h2>Create Your Account</h2>
+        <input type="hidden" name="plan" id="selectedPlan" value="starter">
+
+        <div class="form-group">
+            <label for="company_name">Company Name</label>
+            <input type="text" id="company_name" name="company_name" placeholder="Acme Corp" required>
+        </div>
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" placeholder="you@company.com" required>
+        </div>
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" placeholder="At least 8 characters" minlength="8" required>
+        </div>
+        <div class="form-group">
+            <label for="app_name">App Name</label>
+            <input type="text" id="app_name" name="app_name" placeholder="My Web App">
+        </div>
+
+        <button type="submit" class="btn-submit">Start Free Trial</button>
+        <div class="login-link">Already have an account? <a href="/login">Log in</a></div>
+    </form>
+
+    <script>
+        function selectPlan(el, plan) {
+            document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('selected'));
+            el.classList.add('selected');
+            document.getElementById('selectedPlan').value = plan;
+        }
+    </script>
+</body>
+</html>

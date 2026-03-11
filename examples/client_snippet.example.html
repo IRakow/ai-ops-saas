@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My App — AI Ops Bug Detection Example</title>
+</head>
+<body>
+
+    <h1>Your Application</h1>
+    <p>This is an example showing how to add the AI Ops bug intake widget to any HTML page.</p>
+
+    <!-- ============================================================
+         AI Ops Bug Detection
+         Add this snippet before </body> in your app's HTML.
+         Replace YOUR_SAAS_DOMAIN, YOUR_API_KEY, and app name below.
+         ============================================================ -->
+    <link rel="stylesheet" href="https://YOUR_SAAS_DOMAIN/static/css/bug-intake.css">
+    <script>
+      window.AI_OPS_CONFIG = {
+        endpoint: "https://YOUR_SAAS_DOMAIN/api/v1/intake",
+        apiKey: "YOUR_API_KEY",
+        appName: "Your App Name"
+      };
+    </script>
+    <script src="https://YOUR_SAAS_DOMAIN/static/js/bug-intake.js"></script>
+
+</body>
+</html>

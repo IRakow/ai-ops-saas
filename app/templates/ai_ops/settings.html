@@ -1,0 +1,172 @@
+{% extends "ai_ops/base_ai_ops.html" %}
+
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h2 class="fw-bold mb-4"><i class="fas fa-cog"></i> Settings</h2>
+
+    <!-- Repo Connection -->
+    <div class="card mb-4">
+        <div class="card-header fw-bold"><i class="fas fa-code-branch me-2"></i>Repository Connection</div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label text-muted small">Git Repository</label>
+                    <p class="mb-0 fw-medium">{{ tenant.git_repo_url or 'Not connected' }}</p>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-muted small">Provider</label>
+                    <p class="mb-0 fw-medium">{{ tenant.git_provider or '—' }}</p>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-muted small">Branch</label>
+                    <p class="mb-0 fw-medium">{{ tenant.git_branch or 'main' }}</p>
+                </div>
+            </div>
+            <a href="{{ url_for('onboarding.start') }}" class="btn btn-sm btn-outline-primary mt-3">
+                <i class="fas fa-edit me-1"></i> Change Repo Settings
+            </a>
+        </div>
+    </div>
+
+    <!-- App Info (editable) -->
+    <form method="POST" action="{{ url_for('ai_ops.save_settings') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="card mb-4">
+            <div class="card-header fw-bold"><i class="fas fa-info-circle me-2"></i>Application Info</div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label" for="app_name">App Name</label>
+                        <input type="text" class="form-control" id="app_name" name="app_name"
+                               value="{{ tenant.app_name or '' }}" placeholder="My App">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="app_url">App URL</label>
+                        <input type="url" class="form-control" id="app_url" name="app_url"
+                               value="{{ tenant.app_url or '' }}" placeholder="https://myapp.com">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="app_description">Description</label>
+                        <textarea class="form-control" id="app_description" name="app_description"
+                                  rows="3" placeholder="Brief description of your app...">{{ tenant.app_description or '' }}</textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notifications -->
+        <div class="card mb-4">
+            <div class="card-header fw-bold"><i class="fas fa-bell me-2"></i>Notifications</div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label" for="notification_emails">Notification Emails</label>
+                    <input type="text" class="form-control" id="notification_emails" name="notification_emails"
+                           value="{{ (tenant.notification_emails or []) | join(', ') }}"
+                           placeholder="dev@example.com, ops@example.com">
+                    <div class="form-text">Comma-separated list of email addresses to receive alerts.</div>
+                </div>
+                <div class="mb-0">
+                    <label class="form-label" for="slack_webhook_url">Slack Webhook URL</label>
+                    <input type="url" class="form-control" id="slack_webhook_url" name="slack_webhook_url"
+                           value="{{ tenant.slack_webhook_url or '' }}"
+                           placeholder="https://hooks.slack.com/services/...">
+                    <div class="form-text">Receive fix/deploy notifications in Slack.</div>
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">
+            <i class="fas fa-save me-1"></i> Save Settings
+        </button>
+    </form>
+
+    <!-- Team Members -->
+    <div class="card mt-4 mb-4">
+        <div class="card-header fw-bold"><i class="fas fa-users me-2"></i>Team Members</div>
+        <div class="card-body">
+            {% if tenant.users %}
+            <div class="table-responsive mb-3">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for u in tenant.users %}
+                        <tr>
+                            <td>{{ u.name }}</td>
+                            <td class="text-muted">{{ u.email }}</td>
+                            <td><span class="badge bg-secondary">{{ u.role or 'user' }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted mb-3">No team members found.</p>
+            {% endif %}
+            <form method="POST" action="{{ url_for('ai_ops.save_settings') }}" class="row g-2 align-items-end">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="invite_user">
+                <div class="col-md-4">
+                    <label class="form-label small">Name</label>
+                    <input type="text" class="form-control form-control-sm" name="invite_name" placeholder="Jane Doe">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small">Email</label>
+                    <input type="email" class="form-control form-control-sm" name="invite_email" placeholder="jane@example.com">
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-user-plus me-1"></i> Invite
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- API Keys -->
+    <div class="card mb-4">
+        <div class="card-header fw-bold"><i class="fas fa-key me-2"></i>API Keys</div>
+        <div class="card-body">
+            {% if tenant.api_keys %}
+            <div class="table-responsive mb-3">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Key Prefix</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for key in tenant.api_keys %}
+                        <tr>
+                            <td>{{ key.name or 'Default' }}</td>
+                            <td><code>{{ key.key_prefix }}...</code></td>
+                            <td class="text-muted">{{ key.created_at[:10] if key.created_at else '—' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted mb-3">No API keys yet.</p>
+            {% endif %}
+            <form method="POST" action="{{ url_for('ai_ops.save_settings') }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="generate_api_key">
+                <button type="submit" class="btn btn-sm btn-outline-success">
+                    <i class="fas fa-plus me-1"></i> Generate New API Key
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
