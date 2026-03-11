@@ -3019,6 +3019,7 @@ def process_execution_multi(svc, item, understanding_output=None, tenant=None):
                 "failed",
                 "Implementer timed out after {s}s (2 attempts, no commits)".format(s=elapsed_s),
                 impl_parsed, impl_result, agent_team_log, phase_start,
+                usage_record_id=usage_record_id, tenant_id=tenant_id,
             )
             return
 
@@ -3032,6 +3033,7 @@ def process_execution_multi(svc, item, understanding_output=None, tenant=None):
                 reason=impl_parsed.get("escalation_reason", "Unknown")
             ),
             impl_parsed, impl_result, agent_team_log, phase_start,
+            usage_record_id=usage_record_id, tenant_id=tenant_id,
         )
         return
 
@@ -3089,6 +3091,7 @@ def process_execution_multi(svc, item, understanding_output=None, tenant=None):
             "failed",
             "Implementer output invalid: {reason}".format(reason=impl_valid_reason),
             impl_parsed, impl_result, agent_team_log, phase_start,
+            usage_record_id=usage_record_id, tenant_id=tenant_id,
         )
         return
 
@@ -3124,6 +3127,7 @@ def process_execution_multi(svc, item, understanding_output=None, tenant=None):
                     agent=agent_name,
                 ),
                 impl_parsed, impl_result, agent_team_log, phase_start,
+                usage_record_id=usage_record_id, tenant_id=tenant_id,
             )
             return True
         return False
@@ -3159,6 +3163,7 @@ def process_execution_multi(svc, item, understanding_output=None, tenant=None):
                 ),
                 impl_parsed, impl_result, agent_team_log, phase_start,
                 rollback_happened=True,
+                usage_record_id=usage_record_id, tenant_id=tenant_id,
             )
             return
 
@@ -3288,10 +3293,12 @@ def process_execution_multi(svc, item, understanding_output=None, tenant=None):
             description, impl_stdout,
             tester_output if tester_failed else "",
             validator_output if validator_failed else "",
+            tenant=tenant,
         )
         fixer_result = run_agent_streaming(
             svc, session_id, queue_id, fixer_prompt,
             max_turns=FIXER_MAX_TURNS, timeout=FIXER_TIMEOUT,
+            working_dir=effective_working_dir,
         )
         fixer_stdout = fixer_result.get("stdout", "")
         fixer_parsed = parse_result(fixer_stdout)
@@ -3338,6 +3345,7 @@ def process_execution_multi(svc, item, understanding_output=None, tenant=None):
                     ),
                     impl_parsed, impl_result, agent_team_log, phase_start,
                     rollback_happened=True, retry_count=retry_count,
+                    usage_record_id=usage_record_id, tenant_id=tenant_id,
                 )
                 return
 
@@ -3355,6 +3363,7 @@ def process_execution_multi(svc, item, understanding_output=None, tenant=None):
                     "name": "regression_tester_retry",
                     "prompt": build_tester_prompt(
                         description, commit_sha, files_changed, regression_checkpoints,
+                        tenant=tenant,
                     ),
                     "model": AGENT_MODEL,
                     "max_turns": TESTER_MAX_TURNS,
@@ -3365,13 +3374,14 @@ def process_execution_multi(svc, item, understanding_output=None, tenant=None):
                     "name": "supabase_validator_retry",
                     "prompt": build_supabase_validator_prompt(
                         description, commit_sha, files_changed,
+                        tenant=tenant,
                     ),
                     "model": AGENT_MODEL,
                     "max_turns": SUPABASE_VALIDATOR_MAX_TURNS,
                     "timeout": SUPABASE_VALIDATOR_TIMEOUT,
                     "allowed_tools": "Bash,Read,Glob,Grep",
                 },
-            ])
+            ], working_dir=effective_working_dir)
 
             tester_output = retry_results.get("regression_tester_retry", {}).get("stdout", "")
             agent_team_log.append({
@@ -3432,6 +3442,7 @@ def process_execution_multi(svc, item, understanding_output=None, tenant=None):
             ),
             impl_parsed, impl_result, agent_team_log, phase_start,
             rollback_happened=True,
+            usage_record_id=usage_record_id, tenant_id=tenant_id,
         )
         return
 
@@ -3554,12 +3565,14 @@ def process_execution_multi(svc, item, understanding_output=None, tenant=None):
         description, impl_stdout, tester_for_assessor, validator_for_assessor, soak_text,
         browser_smoke_result=browser_smoke_result,
         browser_tester_output=browser_tester_output,
+        tenant=tenant,
     )
     assessor_result = run_agent_single(
         assessor_prompt,
         model=AGENT_MODEL,
         max_turns=ASSESSOR_MAX_TURNS,
         timeout=ASSESSOR_TIMEOUT,
+        working_dir=effective_working_dir,
     )
     assessor_stdout = assessor_result.get("stdout", "")
 
@@ -3626,6 +3639,40 @@ def process_execution_multi(svc, item, understanding_output=None, tenant=None):
     prod_deploy_detail = ""
 
     if verdict == "FIXED" and commit_sha:
+        # --- Tenant-aware commit & push ---
+        if tenant:
+            try:
+                pr_url = commit_and_push(tenant, session_id, description)
+                if pr_url:
+                    log.info("PR created for tenant %s: %s", tenant.slug, pr_url)
+                    svc.add_message(
+                        session_id, "system", "Worker",
+                        f"Changes pushed. PR: {pr_url}",
+                        message_type="status_update",
+                    )
+                    agent_team_log.append({
+                        "agent": "Git Push",
+                        "phase": "execution",
+                        "passed": True,
+                        "detail": f"PR: {pr_url}",
+                    })
+                else:
+                    log.info("Changes committed for tenant %s (no PR)", tenant.slug)
+                    agent_team_log.append({
+                        "agent": "Git Push",
+                        "phase": "execution",
+                        "passed": True,
+                        "detail": "Committed locally",
+                    })
+            except Exception as e:
+                log.error("commit_and_push failed for tenant %s: %s", tenant.slug, e)
+                agent_team_log.append({
+                    "agent": "Git Push",
+                    "phase": "execution",
+                    "passed": False,
+                    "detail": str(e)[:300],
+                })
+
         # Classify soak sensitivity
         soak_duration, soak_reason = classify_soak_sensitivity(files_changed)
         log.info("Smart soak: %ds (%s)", soak_duration, soak_reason)
@@ -3652,38 +3699,43 @@ def process_execution_multi(svc, item, understanding_output=None, tenant=None):
             )
             final_status = "needs_review"
         else:
-            # Soak passed — deploy to production
-            log.info("Smart soak passed. Deploying to production...")
-            prod_ok, prod_detail = _deploy_to_production(svc, session_id, commit_sha)
+            # Soak passed — deploy to production (only for non-tenant or VM-based tenants)
+            if not tenant:
+                log.info("Smart soak passed. Deploying to production...")
+                prod_ok, prod_detail = _deploy_to_production(svc, session_id, commit_sha)
 
-            agent_team_log.append({
-                "agent": "Production Deploy",
-                "phase": "execution",
-                "passed": prod_ok,
-                "detail": prod_detail[:300],
-            })
+                agent_team_log.append({
+                    "agent": "Production Deploy",
+                    "phase": "execution",
+                    "passed": prod_ok,
+                    "detail": prod_detail[:300],
+                })
 
-            if prod_ok:
-                prod_deployed = True
-                prod_deploy_detail = prod_detail
-                final_status = "deployed_production"
-                svc.add_message(
-                    session_id, "system", "Worker",
-                    "Auto-deployed to production. All checks passed.",
-                    message_type="status_update",
-                )
-                send_sms(
-                    f'{config.APP_NAME} AI Ops: Bug auto-deployed to production '
-                    f'({PRODUCTION_BASE_URL}). "{description[:50]}" Commit: {commit_sha[:12]}'
-                )
+                if prod_ok:
+                    prod_deployed = True
+                    prod_deploy_detail = prod_detail
+                    final_status = "deployed_production"
+                    svc.add_message(
+                        session_id, "system", "Worker",
+                        "Auto-deployed to production. All checks passed.",
+                        message_type="status_update",
+                    )
+                    send_sms(
+                        f'{config.APP_NAME} AI Ops: Bug auto-deployed to production '
+                        f'({PRODUCTION_BASE_URL}). "{description[:50]}" Commit: {commit_sha[:12]}'
+                    )
+                else:
+                    prod_deploy_detail = prod_detail
+                    svc.add_message(
+                        session_id, "system", "Worker",
+                        f"Production deploy failed: {prod_detail[:200]}. Test server still has the fix.",
+                        message_type="status_update",
+                    )
+                    # Don't change final_status — the fix is still good on test
             else:
-                prod_deploy_detail = prod_detail
-                svc.add_message(
-                    session_id, "system", "Worker",
-                    f"Production deploy failed: {prod_detail[:200]}. Test server still has the fix.",
-                    message_type="status_update",
-                )
-                # Don't change final_status — the fix is still good on test
+                # Tenant deploy is handled by commit_and_push above (PR or direct push)
+                prod_deployed = True
+                final_status = "completed"
 
     # Build summary
     total_elapsed = int(time.monotonic() - phase_start)
@@ -3709,6 +3761,34 @@ def process_execution_multi(svc, item, understanding_output=None, tenant=None):
     summary = ". ".join(summary_parts) if summary_parts else "Agent finished."
     summary += " Elapsed: {m}m{s}s.".format(m=elapsed_min, s=elapsed_sec)
 
+    # --- Complete usage record ---
+    if usage_record_id:
+        try:
+            complete_usage_record(
+                usage_record_id,
+                verdict=verdict or final_status,
+                duration_seconds=total_elapsed,
+                agents_used=agent_team_log,
+                retries=retry_count,
+            )
+        except Exception as e:
+            log.warning("Failed to complete usage record: %s", e)
+
+    # --- Deliver webhooks ---
+    tenant_id = item.get("tenant_id")
+    if tenant_id:
+        event_name = "fix.completed" if verdict == "FIXED" else "fix.failed"
+        try:
+            deliver_event(tenant_id, event_name, {
+                "session_id": session_id,
+                "verdict": verdict or final_status,
+                "description": description[:200],
+                "commit_sha": commit_sha or "",
+                "elapsed_seconds": total_elapsed,
+            })
+        except Exception as e:
+            log.warning("Webhook delivery failed: %s", e)
+
     _finalize_execution(
         svc, session_id, queue_id, description, task_label,
         final_status, summary,
@@ -3724,8 +3804,9 @@ def _finalize_execution(svc, session_id, queue_id, description, task_label,
                          agent_team_log, phase_start,
                          soak_passed=False, soak_output="",
                          rollback_happened=False, verdict="", explanation="",
-                         regression_detected=False, retry_count=0):
-    """Finalize execution: update DB, log fix memory, send notifications."""
+                         regression_detected=False, retry_count=0,
+                         usage_record_id=None, tenant_id=None):
+    """Finalize execution: update DB, log fix memory, send notifications, usage tracking."""
     total_elapsed = int(time.monotonic() - phase_start)
     elapsed_min = total_elapsed // 60
     elapsed_sec = total_elapsed % 60
@@ -3804,6 +3885,35 @@ def _finalize_execution(svc, session_id, queue_id, description, task_label,
 
     # --- Bug Intake: update linked bug report status ---
     _update_bug_status_from_verdict(svc, session_id, verdict or final_status)
+
+    # --- Usage record (early-exit paths that didn't already complete it) ---
+    if usage_record_id:
+        try:
+            if final_status in ("completed", "deployed_production", "needs_review"):
+                complete_usage_record(
+                    usage_record_id,
+                    verdict=verdict or final_status,
+                    duration_seconds=total_elapsed,
+                    agents_used=agent_team_log,
+                    retries=retry_count,
+                )
+            else:
+                fail_usage_record(usage_record_id, reason=summary[:200])
+        except Exception as e:
+            log.warning("Failed to finalize usage record: %s", e)
+
+    # --- Webhook delivery (early-exit paths that didn't already deliver) ---
+    if tenant_id:
+        event_name = "fix.completed" if verdict == "FIXED" else "fix.failed"
+        try:
+            deliver_event(tenant_id, event_name, {
+                "session_id": session_id,
+                "verdict": verdict or final_status,
+                "description": description[:200],
+                "elapsed_seconds": total_elapsed,
+            })
+        except Exception as e:
+            log.warning("Webhook delivery failed in finalize: %s", e)
 
     log.info(
         "Execution complete: queue_id=%s, status=%s, verdict=%s, elapsed=%dm%ds",
