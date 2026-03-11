@@ -1576,15 +1576,16 @@ def parse_result(stdout):
 # ---------------------------------------------------------------------------
 
 
-def run_git_validate():
+def run_git_validate(working_dir=None):
     """Run git guard validate before starting a task. Returns (ok, output)."""
+    effective_cwd = working_dir or WORKING_DIR
     try:
         result = subprocess.run(
             ["python3", GIT_GUARD_SCRIPT, "validate"],
             capture_output=True,
             text=True,
             timeout=60,
-            cwd=WORKING_DIR,
+            cwd=effective_cwd,
         )
         output = (result.stdout or "") + (result.stderr or "")
         ok = "FAIL:" not in output
@@ -1596,12 +1597,13 @@ def run_git_validate():
         return False, str(e)
 
 
-def check_git_for_recent_commits(since_seconds_ago=3600):
+def check_git_for_recent_commits(since_seconds_ago=3600, working_dir=None):
     """Check if any commits were made in the last N seconds.
 
     Used after a timeout to detect if the agent committed code before being killed.
     Returns (has_commit, commit_sha, commit_message).
     """
+    effective_cwd = working_dir or WORKING_DIR
     try:
         result = subprocess.run(
             ["git", "log", "--oneline", "--since={} seconds ago".format(since_seconds_ago),
@@ -1609,7 +1611,7 @@ def check_git_for_recent_commits(since_seconds_ago=3600):
             capture_output=True,
             text=True,
             timeout=10,
-            cwd=WORKING_DIR,
+            cwd=effective_cwd,
         )
         output = result.stdout.strip()
         if output and "|" in output:
@@ -1621,18 +1623,19 @@ def check_git_for_recent_commits(since_seconds_ago=3600):
         return False, "", ""
 
 
-def check_git_dirty():
+def check_git_dirty(working_dir=None):
     """Check if working tree has uncommitted changes (agent was mid-work when killed).
 
     Returns (has_changes, files_changed_list).
     """
+    effective_cwd = working_dir or WORKING_DIR
     try:
         result = subprocess.run(
             ["git", "diff", "--name-only"],
             capture_output=True,
             text=True,
             timeout=10,
-            cwd=WORKING_DIR,
+            cwd=effective_cwd,
         )
         files = [f.strip() for f in result.stdout.strip().split("\n") if f.strip()]
         # Exclude ai_ops_worker.py itself (always shows as modified)
@@ -2849,7 +2852,7 @@ def process_execution_multi(svc, item, understanding_output=None, tenant=None):
             log.warning("Failed to start usage record: %s", e)
 
     # --- Pre-task git validation ---
-    git_ok, git_output = run_git_validate()
+    git_ok, git_output = run_git_validate(working_dir=effective_working_dir)
     if not git_ok:
         svc.add_message(
             session_id, "system", "Worker",
@@ -2947,8 +2950,8 @@ def process_execution_multi(svc, item, understanding_output=None, tenant=None):
         log.warning("Implementer timed out after %ds — checking git for commits...", elapsed_s)
 
         # Check if the agent committed code before the timeout
-        has_commit, git_sha, git_msg = check_git_for_recent_commits(elapsed_s + 60)
-        has_dirty, dirty_files = check_git_dirty()
+        has_commit, git_sha, git_msg = check_git_for_recent_commits(elapsed_s + 60, working_dir=effective_working_dir)
+        has_dirty, dirty_files = check_git_dirty(working_dir=effective_working_dir)
 
         if has_commit:
             log.info("Found commit %s after timeout: %s", git_sha[:12], git_msg[:100])
@@ -2974,7 +2977,7 @@ def process_execution_multi(svc, item, understanding_output=None, tenant=None):
                 subprocess.run(
                     ["git", "checkout", "."],
                     capture_output=True, text=True, timeout=10,
-                    cwd=WORKING_DIR,
+                    cwd=effective_working_dir,
                 )
             except Exception:
                 pass
@@ -3001,7 +3004,7 @@ def process_execution_multi(svc, item, understanding_output=None, tenant=None):
     # If still timed out after retry, check git one more time then fail
     if impl_result.get("timed_out"):
         elapsed_s = impl_result.get("elapsed_seconds", 0)
-        has_commit, git_sha, git_msg = check_git_for_recent_commits(elapsed_s + 60)
+        has_commit, git_sha, git_msg = check_git_for_recent_commits(elapsed_s + 60, working_dir=effective_working_dir)
         if has_commit:
             log.info("Found commit %s after retry timeout: %s", git_sha[:12], git_msg[:100])
             impl_parsed["commit_sha"] = git_sha
@@ -4350,7 +4353,7 @@ def main():
     # Recover stuck tasks from previous worker run
     recover_stuck_tasks(svc)
 
-    log.info("Entering poll loop...")
+    log.info("Entering poll loop (multi-tenant fair queue)...")
     poll_count = 0
 
     while not shutdown:
@@ -4364,11 +4367,27 @@ def main():
             except Exception:
                 pass
 
-            item = svc.get_pending_queue_item()
+            # Try fair queue first (multi-tenant), fall back to legacy single-tenant
+            item = None
+            try:
+                item = _poll_queue_fair()
+            except Exception as e:
+                log.debug("Fair queue poll failed, falling back to legacy: %s", e)
+
+            if not item:
+                item = svc.get_pending_queue_item()
+
             if item:
+                tenant_slug = ""
+                if item.get("tenant_id"):
+                    try:
+                        t = load_tenant(item["tenant_id"])
+                        tenant_slug = f" [tenant={t.slug}]"
+                    except Exception:
+                        pass
                 log.info(
-                    "Found pending task: %s (%s)",
-                    item["id"], item.get("description", "")[:60],
+                    "Found pending task: %s (%s)%s",
+                    item["id"], item.get("description", "")[:60], tenant_slug,
                 )
                 process_task(svc, item)
             else:
