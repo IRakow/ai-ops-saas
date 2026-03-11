@@ -1,0 +1,167 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}{{ tenant.name }} — AI Ops Admin{% endblock %}
+{% block topbar_title %}Tenant Detail{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+  <div>
+    <div style="font-size: 12px; color: #555; margin-bottom: 6px;">
+      <a href="{{ url_for('admin.tenants') }}" style="color: #4a90d9; text-decoration: none;">Tenants</a>
+      &rsaquo; {{ tenant.name }}
+    </div>
+    <h1>{{ tenant.name }}</h1>
+    <p style="font-family: monospace; color: #555; font-size: 13px; margin-top: 2px;">{{ tenant.slug }}</p>
+  </div>
+  <div style="display: flex; gap: 10px; align-items: center;">
+    {% if tenant.status | lower == 'suspended' %}
+      <form method="POST" action="{{ url_for('admin.activate_tenant', tenant_id=tenant.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+        <button type="submit" class="btn btn-success">Activate</button>
+      </form>
+    {% else %}
+      <form method="POST" action="{{ url_for('admin.suspend_tenant', tenant_id=tenant.id) }}"
+            onsubmit="return confirm('Suspend {{ tenant.name }}?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+        <button type="submit" class="btn btn-danger">Suspend</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Tenant info -->
+<div class="card" style="margin-bottom: 20px;">
+  <div class="card-title">Tenant Info</div>
+  <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px 24px;">
+
+    <div>
+      <div style="font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Status</div>
+      {% set s = tenant.status | lower %}
+      {% if s == 'active' %}
+        <span class="badge badge-active">Active</span>
+      {% elif s == 'trial' %}
+        <span class="badge badge-trial">Trial</span>
+      {% elif s == 'suspended' %}
+        <span class="badge badge-suspended">Suspended</span>
+      {% else %}
+        <span class="badge badge-pending">{{ tenant.status | capitalize }}</span>
+      {% endif %}
+    </div>
+
+    <div>
+      <div style="font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Plan</div>
+      <div style="font-size: 14px; color: #ccc; text-transform: capitalize;">{{ tenant.plan or '—' }}</div>
+    </div>
+
+    <div>
+      <div style="font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">App Name</div>
+      <div style="font-size: 14px; color: #ccc;">{{ tenant.app_name or '—' }}</div>
+    </div>
+
+    <div>
+      <div style="font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">App URL</div>
+      {% if tenant.app_url %}
+        <a href="{{ tenant.app_url }}" target="_blank" rel="noopener" style="font-size: 13.5px; color: #4a90d9; word-break: break-all;">{{ tenant.app_url }}</a>
+      {% else %}
+        <div style="color: #555;">—</div>
+      {% endif %}
+    </div>
+
+    <div>
+      <div style="font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Git Repo</div>
+      {% if tenant.git_repo_url %}
+        <a href="{{ tenant.git_repo_url }}" target="_blank" rel="noopener" style="font-size: 13px; color: #4a90d9; word-break: break-all; font-family: monospace;">{{ tenant.git_repo_url }}</a>
+      {% else %}
+        <div style="color: #555;">—</div>
+      {% endif %}
+    </div>
+
+    <div>
+      <div style="font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Created</div>
+      <div style="font-size: 14px; color: #ccc;">
+        {{ tenant.created_at.strftime('%Y-%m-%d %H:%M UTC') if tenant.created_at else '—' }}
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Recent sessions -->
+<div class="card section-gap" style="margin-bottom: 20px;">
+  <div class="card-title">Recent Sessions</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Status</th>
+          <th>Phase</th>
+          <th>Started</th>
+          <th>Finished</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for session in sessions %}
+        <tr>
+          <td style="font-family: monospace; font-size: 12px; color: #666;">{{ session.id }}</td>
+          <td>
+            {% set st = session.status | lower %}
+            {% if st == 'completed' %}
+              <span class="badge badge-active">Completed</span>
+            {% elif st in ('running', 'processing') %}
+              <span class="badge badge-processing">{{ session.status | capitalize }}</span>
+            {% elif st == 'failed' %}
+              <span class="badge badge-suspended">Failed</span>
+            {% else %}
+              <span class="badge badge-pending">{{ session.status | capitalize }}</span>
+            {% endif %}
+          </td>
+          <td style="color: #aaa;">{{ session.phase or '—' }}</td>
+          <td style="font-size: 12.5px; color: #666;">
+            {{ session.started_at.strftime('%Y-%m-%d %H:%M') if session.started_at else '—' }}
+          </td>
+          <td style="font-size: 12.5px; color: #666;">
+            {{ session.finished_at.strftime('%Y-%m-%d %H:%M') if session.finished_at else '—' }}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" style="text-align: center; color: #555; padding: 24px;">No sessions yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Usage records -->
+<div class="card section-gap">
+  <div class="card-title">Usage Records</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Metric</th>
+          <th>Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for record in usage %}
+        <tr>
+          <td style="font-size: 12.5px; color: #666;">
+            {{ record.created_at.strftime('%Y-%m-%d') if record.created_at else '—' }}
+          </td>
+          <td style="color: #aaa;">{{ record.metric or '—' }}</td>
+          <td style="color: #ccc;">{{ record.value }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="3" style="text-align: center; color: #555; padding: 24px;">No usage records.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

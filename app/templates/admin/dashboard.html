@@ -1,0 +1,84 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}Dashboard — AI Ops Admin{% endblock %}
+{% block topbar_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Dashboard</h1>
+  <p>Platform overview</p>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Total Tenants</div>
+    <div class="stat-value">{{ total_tenants }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Active</div>
+    <div class="stat-value" style="color: #2ecc71;">{{ active_tenants }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Trial</div>
+    <div class="stat-value" style="color: #f39c12;">{{ trial_tenants }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Suspended</div>
+    <div class="stat-value" style="color: #e74c3c;">{{ suspended_tenants }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Queue Depth</div>
+    <div class="stat-value" style="color: #4a90d9;">{{ queue_depth }}</div>
+  </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+  <div class="card">
+    <div class="card-title">Tenant Status Breakdown</div>
+    <canvas id="tenantChart" height="200"></canvas>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Quick Actions</div>
+    <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 4px;">
+      <a href="{{ url_for('admin.tenants') }}" class="btn btn-primary">View All Tenants</a>
+      <a href="{{ url_for('admin.queue') }}" class="btn btn-secondary">View Queue</a>
+      <a href="{{ url_for('admin.system') }}" class="btn btn-secondary">System Status</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  const ctx = document.getElementById('tenantChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Active', 'Trial', 'Suspended'],
+      datasets: [{
+        data: [{{ active_tenants }}, {{ trial_tenants }}, {{ suspended_tenants }}],
+        backgroundColor: [
+          'rgba(39, 174, 96, 0.7)',
+          'rgba(243, 156, 18, 0.7)',
+          'rgba(231, 76, 60, 0.7)'
+        ],
+        borderColor: [
+          '#27ae60',
+          '#e67e22',
+          '#c0392b'
+        ],
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { color: '#aaa', font: { size: 12 }, padding: 16 }
+        }
+      },
+      cutout: '60%'
+    }
+  });
+</script>
+{% endblock %}

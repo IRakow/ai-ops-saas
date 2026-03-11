@@ -1,0 +1,69 @@
+{% extends "onboarding/base_onboarding.html" %}
+
+{% block title %}Connect Repository{% endblock %}
+{% block step_number %}2{% endblock %}
+
+{% block content %}
+<h1 class="card-title">Connect Your Repository</h1>
+<p class="card-subtitle">Give AI Ops read/write access to your codebase so it can open pull requests and push fixes on your behalf.</p>
+
+<form method="POST" action="{{ url_for('onboarding.connect_repo') }}">
+
+  <div class="form-group">
+    <label for="git_provider">Git Provider</label>
+    <select id="git_provider" name="git_provider" required>
+      <option value="" disabled {% if not request.form.get('git_provider') %}selected{% endif %}>Select a provider...</option>
+      <option value="github"    {% if request.form.get('git_provider') == 'github'    %}selected{% endif %}>GitHub</option>
+      <option value="gitlab"    {% if request.form.get('git_provider') == 'gitlab'    %}selected{% endif %}>GitLab</option>
+      <option value="bitbucket" {% if request.form.get('git_provider') == 'bitbucket' %}selected{% endif %}>Bitbucket</option>
+    </select>
+    <p class="help-text">The platform that hosts your repository. This determines how we authenticate and open pull requests.</p>
+  </div>
+
+  <div class="form-group">
+    <label for="repo_url">Repository URL</label>
+    <input type="text" id="repo_url" name="repo_url"
+           value="{{ request.form.get('repo_url', '') }}"
+           placeholder="https://github.com/yourorg/your-repo" required>
+    <p class="help-text">
+      Full HTTPS clone URL for your repo — for example
+      <code style="background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:12px;">https://github.com/acme/backend</code>.
+      SSH URLs are not supported.
+    </p>
+  </div>
+
+  <div class="form-group">
+    <label for="credential">Personal Access Token or Deploy Key</label>
+    <textarea id="credential" name="credential"
+              rows="4"
+              placeholder="Paste your token or private key here...">{{ request.form.get('credential', '') }}</textarea>
+    <p class="help-text">
+      <strong>Personal Access Token (recommended):</strong> Create a fine-grained token with
+      <em>Contents: Read &amp; Write</em> and <em>Pull Requests: Read &amp; Write</em> permissions.<br><br>
+      <strong>Deploy Key:</strong> Paste your PEM-encoded private key (beginning with
+      <code style="background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:12px;">-----BEGIN</code>).
+      The corresponding public key must be added to your repo's deploy keys with write access.<br><br>
+      Credentials are encrypted at rest using AES-256 and never logged.
+    </p>
+  </div>
+
+  <div class="form-group">
+    <label for="default_branch">Default Branch</label>
+    <input type="text" id="default_branch" name="default_branch"
+           value="{{ request.form.get('default_branch', 'main') }}"
+           placeholder="main">
+    <p class="help-text">The branch AI Ops will target for pull requests and pushes. Usually <code style="background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:12px;">main</code> or <code style="background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:12px;">master</code>.</p>
+  </div>
+
+  <div class="btn-row">
+    <a href="{{ url_for('onboarding.welcome') }}" class="btn btn-secondary">Back</a>
+    <button type="submit" class="btn btn-primary">
+      Continue
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M3 8h10M9 4l4 4-4 4" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+  </div>
+
+</form>
+{% endblock %}

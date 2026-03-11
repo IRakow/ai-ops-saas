@@ -1,0 +1,69 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}Tenants — AI Ops Admin{% endblock %}
+{% block topbar_title %}Tenants{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display: flex; align-items: flex-start; justify-content: space-between;">
+  <div>
+    <h1>Tenants</h1>
+    <p>{{ tenants|length }} tenant{{ 's' if tenants|length != 1 }} registered</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Slug</th>
+          <th>Plan</th>
+          <th>Status</th>
+          <th>Created</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tenant in tenants %}
+        <tr>
+          <td>
+            <a class="row-link" href="{{ url_for('admin.tenant_detail', tenant_id=tenant.id) }}">
+              {{ tenant.name }}
+            </a>
+          </td>
+          <td style="color: #666; font-family: monospace; font-size: 12.5px;">{{ tenant.slug }}</td>
+          <td style="text-transform: capitalize;">{{ tenant.plan or '—' }}</td>
+          <td>
+            {% set s = tenant.status | lower %}
+            {% if s == 'active' %}
+              <span class="badge badge-active">Active</span>
+            {% elif s == 'trial' %}
+              <span class="badge badge-trial">Trial</span>
+            {% elif s == 'suspended' %}
+              <span class="badge badge-suspended">Suspended</span>
+            {% else %}
+              <span class="badge badge-pending">{{ tenant.status | capitalize }}</span>
+            {% endif %}
+          </td>
+          <td style="color: #666; font-size: 12.5px;">
+            {{ tenant.created_at.strftime('%Y-%m-%d') if tenant.created_at else '—' }}
+          </td>
+          <td>
+            <a class="btn btn-secondary btn-sm" href="{{ url_for('admin.tenant_detail', tenant_id=tenant.id) }}">
+              View
+            </a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" style="text-align: center; color: #555; padding: 32px;">
+            No tenants yet.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

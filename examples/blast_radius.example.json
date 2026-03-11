@@ -1,0 +1,272 @@
+{
+  "_comment": "Blast radius allowlist: files each module's AI fixes are allowed to touch",
+  "_global_allowed": [
+    "app/__init__.py",
+    "app/utils/*.py",
+    "requirements.txt"
+  ],
+  "modules": {
+    "dashboard": {
+      "allowed_files": [
+        "app/routes/dashboard.py",
+        "app/services/dashboard_service.py",
+        "app/templates/dashboard/*.html",
+        "app/static/js/dashboard*.js",
+        "app/static/css/custom.css"
+      ],
+      "related_services": [
+        "app/services/property_service.py",
+        "app/services/cross_instance_dashboard_service.py",
+        "app/services/notification_service.py",
+        "app/services/signals_generator.py"
+      ]
+    },
+    "properties": {
+      "allowed_files": [
+        "app/routes/properties.py",
+        "app/services/property_service.py",
+        "app/templates/properties/*.html",
+        "app/static/js/property_settings.js",
+        "app/static/css/property_settings.css"
+      ],
+      "related_services": [
+        "app/services/bank_accounts_service.py",
+        "app/services/bank_reconciliation_service.py",
+        "app/services/document_service.py",
+        "app/services/gcs_service.py",
+        "app/services/portfolio_valuation_service.py",
+        "app/routes/bank_accounts.py"
+      ]
+    },
+    "tenants": {
+      "allowed_files": [
+        "app/routes/tenants.py",
+        "app/services/tenant_service.py",
+        "app/templates/tenants/*.html",
+        "app/templates/tenants/reports/*.html",
+        "app/templates/tenancy/*.html"
+      ],
+      "related_services": [
+        "app/services/tenant_identification_service.py",
+        "app/services/tenant_portal_service.py",
+        "app/services/lease_service.py",
+        "app/services/payment_service.py",
+        "app/routes/tenant_portal.py",
+        "app/templates/tenant_portal/*.html",
+        "app/static/js/tenant-portal.js",
+        "app/static/css/tenant-portal.css"
+      ]
+    },
+    "leasing": {
+      "allowed_files": [
+        "app/routes/leasing.py",
+        "app/routes/leases.py",
+        "app/routes/leasing_reports.py",
+        "app/services/leasing_service.py",
+        "app/services/lease_service.py",
+        "app/templates/leasing/**/*.html",
+        "app/templates/leases/*.html",
+        "app/static/js/leasing-metrics.js",
+        "app/static/css/leasing-metrics.css",
+        "app/static/js/reporting/*.js"
+      ],
+      "related_services": [
+        "app/services/lease_renewal_notification_service.py",
+        "app/services/folioscreen_service.py",
+        "app/services/marketing_leasing_service.py",
+        "app/services/notification_service.py",
+        "app/routes/marketing_leasing.py",
+        "app/templates/marketing_leasing/*.html"
+      ]
+    },
+    "maintenance": {
+      "allowed_files": [
+        "app/routes/maintenance.py",
+        "app/routes/maintenance_worker_portal.py",
+        "app/routes/inspections.py",
+        "app/services/maintenance_service.py",
+        "app/services/maintenance_dashboard_service.py",
+        "app/services/maintenance_worker_service.py",
+        "app/services/inspections_service.py",
+        "app/services/recurring_work_order_service.py",
+        "app/templates/maintenance/*.html",
+        "app/templates/maintenance_worker_portal/*.html",
+        "app/static/js/maintenance-worker-portal.js",
+        "app/static/js/maintenance-worker-sw.js",
+        "app/static/js/unit_turn*.js",
+        "app/static/css/maintenance-worker-portal.css"
+      ],
+      "related_services": [
+        "app/services/notification_service.py",
+        "app/services/vendor_service.py",
+        "app/services/project_service.py",
+        "app/services/gcs_service.py"
+      ]
+    },
+    "accounting": {
+      "allowed_files": [
+        "app/routes/accounting.py",
+        "app/routes/accounting_reports.py",
+        "app/routes/journal_entries.py",
+        "app/routes/budgets.py",
+        "app/routes/bank_accounts.py",
+        "app/routes/expense_allocations.py",
+        "app/routes/tax.py",
+        "app/routes/tax_management.py",
+        "app/services/accounting_reports_service.py",
+        "app/services/bank_accounts_service.py",
+        "app/services/bank_reconciliation_service.py",
+        "app/services/bank_transfer_service.py",
+        "app/services/budget_service.py",
+        "app/services/journal_entry_service.py",
+        "app/services/expense_allocation_service.py",
+        "app/services/rubs_service.py",
+        "app/services/tax_management_service.py",
+        "app/templates/accounting/**/*.html",
+        "app/templates/budgets/*.html",
+        "app/templates/bank_accounts/*.html",
+        "app/templates/expense_allocations/*.html",
+        "app/templates/tax/*.html",
+        "app/templates/tax_management/*.html",
+        "app/static/js/gl-account*.js",
+        "app/static/js/budget.js",
+        "app/static/js/financial-diagnostics.js",
+        "app/static/js/reports/*.js"
+      ],
+      "related_services": [
+        "app/services/reporting_service.py",
+        "app/services/export_service.py",
+        "app/services/report_export_service.py",
+        "app/services/owner_reports_service.py",
+        "app/routes/reporting.py",
+        "app/routes/reports.py",
+        "app/routes/diagnostic_reports.py",
+        "app/templates/reporting/*.html",
+        "app/templates/reports/*.html",
+        "app/static/css/reports.css"
+      ]
+    },
+    "payments": {
+      "allowed_files": [
+        "app/routes/payments.py",
+        "app/services/payment_service.py",
+        "app/templates/payments/*.html"
+      ],
+      "related_services": [
+        "app/services/billing_metering_service.py",
+        "app/services/notification_service.py",
+        "app/services/tenant_service.py"
+      ]
+    },
+    "calendar": {
+      "allowed_files": [
+        "app/routes/calendar.py",
+        "app/templates/calendar/*.html",
+        "app/static/js/calendar.js",
+        "app/static/js/events-list.js",
+        "app/static/js/vendor/fullcalendar.min.js",
+        "app/static/css/calendar.css",
+        "app/static/css/calendar-mobile.css"
+      ],
+      "related_services": [
+        "app/services/notification_service.py",
+        "app/services/notification_scheduler_service.py"
+      ]
+    },
+    "communication": {
+      "allowed_files": [
+        "app/routes/communication.py",
+        "app/routes/communications.py",
+        "app/routes/notifications.py",
+        "app/services/communication_service.py",
+        "app/services/communications_service.py",
+        "app/services/notification_service.py",
+        "app/services/notification_generator_service.py",
+        "app/services/notification_scheduler_service.py",
+        "app/services/sendgrid_service.py",
+        "app/services/twilio_service.py",
+        "app/services/unsubscribe_service.py",
+        "app/templates/communication/*.html",
+        "app/templates/communications/*.html",
+        "app/templates/notifications/*.html",
+        "app/static/js/communication/*.js",
+        "app/static/js/notifications.js"
+      ],
+      "related_services": [
+        "app/services/translation_service.py",
+        "app/services/tenant_service.py"
+      ]
+    },
+    "units": {
+      "allowed_files": [
+        "app/routes/units.py",
+        "app/routes/units_web.py",
+        "app/templates/units/*.html",
+        "app/static/js/unit_turn*.js"
+      ],
+      "related_services": [
+        "app/services/property_service.py",
+        "app/services/lease_service.py",
+        "app/utils/unit_validation.py"
+      ]
+    },
+    "ai_ops": {
+      "allowed_files": [
+        "app/routes/ai_ops.py",
+        "app/services/ai_ops_service.py",
+        "app/services/ai_ops_orchestrator.py",
+        "app/services/ai_ops_prompts.py",
+        "app/services/ai_ops_notification_service.py",
+        "app/templates/ai_ops/*.html",
+        "app/static/js/ai-ops-chat.js",
+        "app/static/js/ai-ops-status.js",
+        "app/static/css/ai-ops.css",
+        "app/utils/ai_ops_auth.py"
+      ],
+      "related_services": [
+        "app/services/ai_assistant_service.py",
+        "app/services/command_executor.py",
+        "app/services/gemini_client.py",
+        "app/utils/ai_client.py",
+        "ai_ops_blast_radius.json"
+      ]
+    },
+    "auth": {
+      "allowed_files": [
+        "app/routes/auth.py",
+        "app/templates/auth/*.html",
+        "app/templates/account/*.html",
+        "app/static/js/auth-utils.js",
+        "app/utils/auth.py",
+        "app/utils/auth_decorators.py",
+        "app/utils/encryption.py"
+      ],
+      "related_services": [
+        "app/services/two_factor_service.py",
+        "app/services/login_history_service.py",
+        "app/services/security_control_service.py",
+        "app/utils/tenant_auth.py",
+        "app/utils/maintenance_worker_auth.py"
+      ]
+    },
+    "global_search": {
+      "allowed_files": [
+        "app/routes/search.py",
+        "app/routes/ai_search.py",
+        "app/services/search_service.py",
+        "app/services/semantic_search_service.py",
+        "app/services/embedding_service.py",
+        "app/services/intent_classifier.py",
+        "app/templates/search/*.html",
+        "app/static/js/search.js",
+        "app/static/js/global-search.js",
+        "app/static/css/ai-search.css"
+      ],
+      "related_services": [
+        "app/services/rag_service.py",
+        "app/services/gemini_client.py",
+        "app/utils/ai_client.py"
+      ]
+    }
+  }
+}

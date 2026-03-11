@@ -1,0 +1,41 @@
+{% extends "onboarding/base_onboarding.html" %}
+
+{% block title %}Scan Codebase{% endblock %}
+{% block step_number %}3{% endblock %}
+
+{% block content %}
+<h1 class="card-title">Review Your Codebase Context</h1>
+<p class="card-subtitle">
+  AI Ops scanned <strong>{{ tenant }}</strong>'s repository and generated the context below.
+  This is what the AI agents read before making any changes — review it and edit anything that's inaccurate or missing.
+</p>
+
+<div class="info-box">
+  Accurate context leads to better pull requests. Add details like your tech stack, coding conventions, off-limits files, or anything agents should know before touching code.
+</div>
+
+<form method="POST" action="{{ url_for('onboarding.scan_codebase') }}">
+
+  <div class="form-group">
+    <label for="codebase_context">Codebase Context</label>
+    <textarea id="codebase_context" name="codebase_context"
+              rows="16"
+              style="font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 13px; line-height: 1.6;">{{ context }}</textarea>
+    <p class="help-text">
+      Markdown is supported. Common things to include: primary language and framework, folder structure overview,
+      test commands, environment variable conventions, and any files agents should never modify.
+    </p>
+  </div>
+
+  <div class="btn-row">
+    <a href="{{ url_for('onboarding.connect_repo') }}" class="btn btn-secondary">Back</a>
+    <button type="submit" class="btn btn-primary">
+      Save &amp; Continue
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M3 8h10M9 4l4 4-4 4" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+  </div>
+
+</form>
+{% endblock %}

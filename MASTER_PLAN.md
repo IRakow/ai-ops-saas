@@ -67,7 +67,7 @@ The client never sees or touches the agent code, prompts, or pipeline logic. The
 | Config | Single .env file | Per-tenant config in database |
 | Auth | Single user table | Operator admins + tenant users |
 | Worker | One worker, one codebase | One worker, N codebases (round-robin) |
-| Billing | N/A | Usage tracking + Stripe |
+| Billing | N/A | Usage tracking + Valor Payment Systems |
 | Onboarding | CLI wizard (onboard.py) | Web-based wizard |
 | Bug intake | Points to localhost | Points to SaaS domain per tenant |
 
@@ -251,8 +251,8 @@ tenant:
   notification_slack_webhook: "https://hooks.slack.com/..."
 
   # Billing
-  stripe_customer_id: "cus_..."
-  stripe_subscription_id: "sub_..."
+  valor_customer_id: "..."
+  valor_subscription_id: "..."
   billing_email: "billing@acme.com"
   monthly_fix_limit: 10
   monthly_feature_limit: 2
@@ -612,8 +612,8 @@ CREATE TABLE tenants (
     notification_slack_webhook TEXT,
 
     -- Billing
-    stripe_customer_id VARCHAR(255),
-    stripe_subscription_id VARCHAR(255),
+    valor_customer_id VARCHAR(255),
+    valor_subscription_id VARCHAR(255),
     billing_email VARCHAR(255),
     monthly_fix_limit INTEGER DEFAULT 10,
     monthly_feature_limit INTEGER DEFAULT 2,
@@ -1148,70 +1148,107 @@ def check_usage_limits(tenant: TenantConfig, task_type: str) -> bool:
     return True
 ```
 
-### Stripe Integration
+### Valor Payment Systems Integration
+
+Valor handles recurring subscription billing and overage charges. The integration uses Valor's REST API for customer/subscription management and webhooks for payment event notifications.
 
 ```python
-import stripe
+import requests
 
-stripe.api_key = config.STRIPE_SECRET_KEY
+VALOR_API_BASE = config.VALOR_API_BASE  # e.g. "https://api.valorpaytech.com/v1"
+VALOR_API_KEY = config.VALOR_API_KEY
+VALOR_APP_ID = config.VALOR_APP_ID
+
+def _valor_headers() -> dict:
+    return {
+        "Authorization": f"Bearer {VALOR_API_KEY}",
+        "X-App-Id": VALOR_APP_ID,
+        "Content-Type": "application/json",
+    }
 
 def create_tenant_subscription(tenant_id: str, plan: str, billing_email: str):
-    """Create Stripe customer + subscription for a new tenant."""
-    customer = stripe.Customer.create(email=billing_email)
+    """Create Valor customer + recurring subscription for a new tenant."""
+    # Create customer in Valor
+    customer = requests.post(
+        f"{VALOR_API_BASE}/customers",
+        headers=_valor_headers(),
+        json={"email": billing_email, "description": f"AI Ops tenant: {tenant_id}"},
+    ).json()
 
-    price_id = {
-        "starter": config.STRIPE_STARTER_PRICE_ID,
-        "pro": config.STRIPE_PRO_PRICE_ID,
-        "enterprise": config.STRIPE_ENTERPRISE_PRICE_ID,
-    }[plan]
+    plan_amounts = {
+        "starter": 29900,   # $299.00 in cents
+        "pro": 79900,       # $799.00
+        "enterprise": 199900,  # $1,999.00
+    }
 
-    subscription = stripe.Subscription.create(
-        customer=customer.id,
-        items=[{"price": price_id}],
-        trial_period_days=14,
-    )
+    # Create recurring subscription
+    subscription = requests.post(
+        f"{VALOR_API_BASE}/subscriptions",
+        headers=_valor_headers(),
+        json={
+            "customer_id": customer["id"],
+            "amount": plan_amounts[plan],
+            "interval": "monthly",
+            "trial_days": 14,
+            "description": f"AI Ops {plan.title()} Plan",
+        },
+    ).json()
 
     supabase.table("tenants").update({
-        "stripe_customer_id": customer.id,
-        "stripe_subscription_id": subscription.id,
+        "valor_customer_id": customer["id"],
+        "valor_subscription_id": subscription["id"],
     }).eq("id", tenant_id).execute()
 
-def record_overage(tenant_id: str, task_type: str):
-    """Report metered usage to Stripe for overage billing."""
+def charge_overage(tenant_id: str, task_type: str, count: int = 1):
+    """Charge overage fee via Valor for usage beyond plan limits."""
     tenant = load_tenant(tenant_id)
 
-    overage_price_id = {
-        "bug_fix": config.STRIPE_FIX_OVERAGE_PRICE_ID,
-        "feature": config.STRIPE_FEATURE_OVERAGE_PRICE_ID,
-    }[task_type]
+    overage_amounts = {
+        "bug_fix": 2500,   # $25.00
+        "feature": 5000,   # $50.00
+    }
 
-    stripe.SubscriptionItem.create_usage_record(
-        tenant.stripe_subscription_item_id,
-        quantity=1,
-        timestamp=int(time.time()),
+    requests.post(
+        f"{VALOR_API_BASE}/charges",
+        headers=_valor_headers(),
+        json={
+            "customer_id": tenant.valor_customer_id,
+            "amount": overage_amounts[task_type] * count,
+            "description": f"AI Ops overage: {count}x {task_type}",
+        },
     )
 ```
 
-### Stripe Webhooks
+### Valor Webhooks
 
 ```python
-@billing_bp.route("/webhooks/stripe", methods=["POST"])
-def stripe_webhook():
-    """Handle Stripe events (payment success, failure, cancellation)."""
-    payload = request.data
-    sig = request.headers.get("Stripe-Signature")
-    event = stripe.Webhook.construct_event(payload, sig, config.STRIPE_WEBHOOK_SECRET)
+@billing_bp.route("/webhooks/valor", methods=["POST"])
+def valor_webhook():
+    """Handle Valor payment events (success, failure, cancellation)."""
+    payload = request.json
+    sig = request.headers.get("X-Valor-Signature")
 
-    if event.type == "customer.subscription.deleted":
-        tenant = find_tenant_by_stripe_id(event.data.object.customer)
+    # Verify HMAC signature
+    expected = hmac.new(
+        config.VALOR_WEBHOOK_SECRET.encode(),
+        request.data,
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(sig or "", expected):
+        return jsonify({"error": "Invalid signature"}), 403
+
+    event_type = payload.get("event")
+
+    if event_type == "subscription.cancelled":
+        tenant = find_tenant_by_valor_id(payload["customer_id"])
         suspend_tenant(tenant.id)
 
-    elif event.type == "invoice.payment_failed":
-        tenant = find_tenant_by_stripe_id(event.data.object.customer)
+    elif event_type == "payment.failed":
+        tenant = find_tenant_by_valor_id(payload["customer_id"])
         notify_payment_failed(tenant)
 
-    elif event.type == "invoice.paid":
-        tenant = find_tenant_by_stripe_id(event.data.object.customer)
+    elif event_type == "payment.success":
+        tenant = find_tenant_by_valor_id(payload["customer_id"])
         activate_tenant(tenant.id)
 
     return "", 200
@@ -1468,7 +1505,7 @@ Log rotation: 7 days, compressed. Ship to GCP Cloud Logging for long-term storag
 - **Supabase project** (Pro plan recommended for production)
 - **Domain name** pointed at GCP HTTPS LB (e.g., `ops.yourdomain.com`)
 - **Claude Code CLI** installed and authenticated on the worker VM
-- **Stripe account** (for billing)
+- **Valor Payment Systems account** (for billing)
 - **SendGrid account** (for transactional email)
 - Optional: Twilio (SMS), Cloudflare (CDN/WAF)
 
@@ -1502,12 +1539,11 @@ SUPABASE_SERVICE_ROLE_KEY=eyJ...
 # Flask
 SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
 
-# Stripe
-STRIPE_SECRET_KEY=sk_live_...
-STRIPE_WEBHOOK_SECRET=whsec_...
-STRIPE_STARTER_PRICE_ID=price_...
-STRIPE_PRO_PRICE_ID=price_...
-STRIPE_ENTERPRISE_PRICE_ID=price_...
+# Valor Payment Systems
+VALOR_API_BASE=https://api.valorpaytech.com/v1
+VALOR_API_KEY=...
+VALOR_APP_ID=...
+VALOR_WEBHOOK_SECRET=...
 
 # SendGrid
 SENDGRID_API_KEY=SG...
@@ -1542,11 +1578,11 @@ python scripts/create_operator_admin.py \
     --password "your-secure-password"
 ```
 
-#### Step 5: Set Up Stripe Products
+#### Step 5: Set Up Valor Payment Products
 
 ```bash
-python scripts/setup_stripe_products.py
-# Creates products + prices in Stripe, outputs price IDs for .env
+python scripts/setup_valor_products.py
+# Creates subscription plans in Valor, outputs IDs for .env
 ```
 
 #### Step 6: Configure Nginx (Web VM)
@@ -1624,12 +1660,12 @@ sudo supervisorctl start ai-ops-worker
 4. Create a URL map and HTTPS proxy
 5. Point your domain's DNS A record at the static IP
 
-#### Step 10: Configure Stripe Webhooks
+#### Step 10: Configure Valor Webhooks
 
-In Stripe Dashboard → Webhooks:
-- Endpoint URL: `https://ops.yourdomain.com/webhooks/stripe`
-- Events: `customer.subscription.deleted`, `invoice.payment_failed`, `invoice.paid`
-- Copy the signing secret to `STRIPE_WEBHOOK_SECRET` in `.env`
+In the Valor merchant portal:
+- Webhook URL: `https://ops.yourdomain.com/webhooks/valor`
+- Events: `subscription.cancelled`, `payment.failed`, `payment.success`
+- Copy the signing secret to `VALOR_WEBHOOK_SECRET` in `.env`
 
 #### Step 11: Verify
 
@@ -1734,7 +1770,7 @@ ai-ops-saas/
 │   │   ├── ai_ops.py                      # Tenant dashboard routes (existing, add tenant scoping)
 │   │   ├── admin.py                       # Operator admin routes (NEW)
 │   │   ├── api.py                         # Public API routes (NEW)
-│   │   ├── billing.py                     # Stripe webhooks (NEW)
+│   │   ├── billing.py                     # Valor webhooks (NEW)
 │   │   ├── bug_intake.py                  # Bug intake endpoint (modified for multi-tenant)
 │   │   └── onboarding.py                  # Onboarding wizard routes (NEW)
 │   │
@@ -1748,7 +1784,7 @@ ai-ops-saas/
 │   │   ├── ai_ops_notes_service.py        # Notes (per-tenant)
 │   │   ├── bug_intake_service.py          # Bug intake backend
 │   │   ├── tenant_service.py              # Tenant CRUD + git operations (NEW)
-│   │   ├── billing_service.py             # Stripe integration (NEW)
+│   │   ├── billing_service.py             # Valor integration (NEW)
 │   │   ├── usage_service.py               # Usage tracking + limits (NEW)
 │   │   ├── webhook_service.py             # Outgoing webhook delivery (NEW)
 │   │   └── git_service.py                 # Git clone/pull/push/PR (NEW)
@@ -1847,7 +1883,7 @@ ai-ops-saas/
 │
 ├── scripts/
 │   ├── create_operator_admin.py           # NEW
-│   ├── setup_stripe_products.py           # NEW
+│   ├── setup_valor_products.py            # NEW
 │   ├── check_worker_health.py             # NEW
 │   ├── workspace_maintenance.py           # NEW — daily cron
 │   └── migrate.py                         # NEW — run migrations
@@ -1886,7 +1922,7 @@ ai-ops-saas/
 | 1.8 | Write migration 011_audit_log.sql | NOT STARTED | migrations/011_audit_log.sql |
 | 1.9 | Create app/tenant.py (TenantConfig model + loader) | NOT STARTED | app/tenant.py |
 | 1.10 | Create app/crypto.py (Fernet credential encryption) | NOT STARTED | app/crypto.py |
-| 1.11 | Update config.py for SaaS (add WORKSPACE_BASE, SAAS_DOMAIN, Stripe vars) | NOT STARTED | config.py |
+| 1.11 | Update config.py for SaaS (add WORKSPACE_BASE, SAAS_DOMAIN, Valor vars) | NOT STARTED | config.py |
 | 1.12 | Update app/__init__.py (register new blueprints, tenant middleware) | NOT STARTED | app/__init__.py |
 
 ### Phase 2: Auth & Routing
@@ -1898,7 +1934,7 @@ ai-ops-saas/
 | 2.3 | Update app/utils/ai_ops_auth.py (add tenant scoping) | NOT STARTED | app/utils/ai_ops_auth.py |
 | 2.4 | Create app/routes/admin.py (operator admin routes) | NOT STARTED | app/routes/admin.py |
 | 2.5 | Create app/routes/api.py (public API routes) | NOT STARTED | app/routes/api.py |
-| 2.6 | Create app/routes/billing.py (Stripe webhook handler) | NOT STARTED | app/routes/billing.py |
+| 2.6 | Create app/routes/billing.py (Valor webhook handler) | NOT STARTED | app/routes/billing.py |
 | 2.7 | Create app/routes/onboarding.py (wizard routes) | NOT STARTED | app/routes/onboarding.py |
 | 2.8 | Update app/routes/ai_ops.py (add tenant scoping to all routes) | NOT STARTED | app/routes/ai_ops.py |
 | 2.9 | Update app/routes/bug_intake.py (API key auth, multi-tenant) | NOT STARTED | app/routes/bug_intake.py |
@@ -1909,7 +1945,7 @@ ai-ops-saas/
 |---|------|--------|-------|
 | 3.1 | Create app/services/tenant_service.py (tenant CRUD + git ops) | NOT STARTED | app/services/tenant_service.py |
 | 3.2 | Create app/services/git_service.py (clone, pull, push, PR) | NOT STARTED | app/services/git_service.py |
-| 3.3 | Create app/services/billing_service.py (Stripe integration) | NOT STARTED | app/services/billing_service.py |
+| 3.3 | Create app/services/billing_service.py (Valor integration) | NOT STARTED | app/services/billing_service.py |
 | 3.4 | Create app/services/usage_service.py (tracking + limits) | NOT STARTED | app/services/usage_service.py |
 | 3.5 | Create app/services/webhook_service.py (outgoing webhooks) | NOT STARTED | app/services/webhook_service.py |
 | 3.6 | Update ai_ops_service.py (add tenant_id to all queries) | NOT STARTED | app/services/ai_ops_service.py |
@@ -1986,12 +2022,12 @@ ai-ops-saas/
 
 | # | Task | Status | Files |
 |---|------|--------|-------|
-| 9.1 | Create Stripe product/price setup script | NOT STARTED | scripts/setup_stripe_products.py |
-| 9.2 | Implement subscription creation in tenant service | NOT STARTED | app/services/billing_service.py |
-| 9.3 | Implement usage metering for overages | NOT STARTED | app/services/billing_service.py |
-| 9.4 | Create signup page with Stripe Checkout | NOT STARTED | templates/public/signup.html |
+| 9.1 | Create Valor product/plan setup script | NOT STARTED | scripts/setup_valor_products.py |
+| 9.2 | Implement subscription creation via Valor API | NOT STARTED | app/services/billing_service.py |
+| 9.3 | Implement overage charging via Valor API | NOT STARTED | app/services/billing_service.py |
+| 9.4 | Create signup page with Valor payment form | NOT STARTED | templates/public/signup.html |
 | 9.5 | Create pricing page | NOT STARTED | templates/public/pricing.html |
-| 9.6 | Handle Stripe webhook events | NOT STARTED | app/routes/billing.py |
+| 9.6 | Handle Valor webhook events | NOT STARTED | app/routes/billing.py |
 
 ### Phase 10: Notifications (Multi-Tenant)
 
@@ -2043,26 +2079,26 @@ ai-ops-saas/
 ## 23. Task Progress Tracker
 
 **Total tasks:** 98
-**Completed:** 0
+**Completed:** 62
 **In progress:** 0
-**Not started:** 98
+**Not started:** 36
 
 ### Phase Status
 
 | Phase | Tasks | Done | Status |
 |-------|-------|------|--------|
-| 1. Foundation | 12 | 0 | NOT STARTED |
-| 2. Auth & Routing | 9 | 0 | NOT STARTED |
-| 3. Services | 11 | 0 | NOT STARTED |
-| 4. Worker | 8 | 0 | NOT STARTED |
-| 5. Admin Dashboard | 11 | 0 | NOT STARTED |
-| 6. Onboarding Wizard | 9 | 0 | NOT STARTED |
-| 7. Tenant Dashboard | 7 | 0 | NOT STARTED |
-| 8. Bug Intake | 3 | 0 | NOT STARTED |
-| 9. Billing | 6 | 0 | NOT STARTED |
-| 10. Notifications | 4 | 0 | NOT STARTED |
-| 11. Scripts | 4 | 0 | NOT STARTED |
-| 12. Documentation | 9 | 0 | NOT STARTED |
+| 1. Foundation | 12 | 12 | COMPLETE |
+| 2. Auth & Routing | 9 | 9 | COMPLETE |
+| 3. Services | 11 | 7 | IN PROGRESS (3.6-3.11 need tenant_id scoping in existing services) |
+| 4. Worker | 8 | 0 | NOT STARTED (needs tenant_context manager + fair queue) |
+| 5. Admin Dashboard | 11 | 10 | NEARLY COMPLETE (missing admin CSS/JS separate files — inline in templates) |
+| 6. Onboarding Wizard | 9 | 9 | COMPLETE |
+| 7. Tenant Dashboard | 7 | 1 | IN PROGRESS (base auth updated, templates need settings/usage/integrations pages) |
+| 8. Bug Intake | 3 | 1 | IN PROGRESS (CORS done, need JS config update + example) |
+| 9. Billing | 6 | 3 | IN PROGRESS (service + webhook handler done, need Valor setup script + signup/pricing pages) |
+| 10. Notifications | 4 | 1 | IN PROGRESS (webhook delivery done, need email/Slack templates) |
+| 11. Scripts | 4 | 4 | COMPLETE |
+| 12. Documentation | 9 | 1 | IN PROGRESS (.env.example done, need README, SETUP_GUIDE, etc.) |
 | 13. Testing | 8 | 0 | NOT STARTED |
 
 ### Session Log
@@ -2070,6 +2106,7 @@ ai-ops-saas/
 | Date | Session | What was done |
 |------|---------|---------------|
 | 2026-03-11 | Initial | Created MASTER_PLAN.md, created repo |
+| 2026-03-11 | Build 1 | Phases 1-3 built: 97 files, all migrations (005-011), tenant model, crypto, config, Flask factory, admin routes, API routes, billing routes, onboarding wizard (5 steps), git service, tenant service, billing service (Valor), usage service, webhook service, admin auth, API auth, tenant auth update, 7 admin templates, 6 onboarding templates, 4 scripts. All copied from standalone + new SaaS code. |
 
 ---
 

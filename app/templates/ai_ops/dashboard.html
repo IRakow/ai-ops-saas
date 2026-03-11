@@ -1,0 +1,254 @@
+{% extends "ai_ops/base_ai_ops.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-1">Welcome, {{ user.name }}</h2>
+            <p class="text-muted mb-0">What would you like to work on?</p>
+        </div>
+    </div>
+
+    <!-- New Session Cards -->
+    <div class="row g-4 mb-5">
+        <div class="col-md-6">
+            <form method="POST" action="{{ url_for('ai_ops.new_session') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="mode" value="bug_fix">
+                <button type="submit" class="ai-ops-mode-card w-100 text-start">
+                    <div class="card h-100 border-danger border-2">
+                        <div class="card-body p-4">
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="ai-ops-mode-icon bg-danger bg-opacity-10 text-danger">
+                                    <i class="fas fa-bug fa-2x"></i>
+                                </div>
+                                <h4 class="ms-3 mb-0 fw-bold">Something is broken</h4>
+                            </div>
+                            <p class="text-muted mb-0">
+                                Report a bug or issue. Our AI team will investigate,
+                                diagnose the problem, and fix it.
+                            </p>
+                        </div>
+                    </div>
+                </button>
+            </form>
+        </div>
+
+        <div class="col-md-6">
+            <form method="POST" action="{{ url_for('ai_ops.new_session') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="mode" value="new_feature">
+                <button type="submit" class="ai-ops-mode-card w-100 text-start">
+                    <div class="card h-100 border-primary border-2">
+                        <div class="card-body p-4">
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="ai-ops-mode-icon bg-primary bg-opacity-10 text-primary">
+                                    <i class="fas fa-lightbulb fa-2x"></i>
+                                </div>
+                                <h4 class="ms-3 mb-0 fw-bold">I want something new</h4>
+                            </div>
+                            <p class="text-muted mb-0">
+                                Request a new feature or improvement. Our AI team will
+                                plan, build, and deploy it.
+                            </p>
+                        </div>
+                    </div>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Session Summary Counters -->
+    {% set ns = namespace(total=0, completed=0, failed=0, running=0) %}
+    {% for sess in sessions %}
+        {% set ns.total = ns.total + 1 %}
+        {% if sess.status == 'completed' %}
+            {% set ns.completed = ns.completed + 1 %}
+        {% elif sess.status == 'failed' %}
+            {% set ns.failed = ns.failed + 1 %}
+        {% elif sess.status in ['running', 'coding', 'testing', 'deploying_staging', 'queued'] %}
+            {% set ns.running = ns.running + 1 %}
+        {% endif %}
+    {% endfor %}
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card text-center border-0 shadow-sm">
+                <div class="card-body py-3">
+                    <h3 class="fw-bold mb-1">{{ ns.total }}</h3>
+                    <span class="badge bg-secondary">Total Sessions</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center border-0 shadow-sm">
+                <div class="card-body py-3">
+                    <h3 class="fw-bold mb-1 text-success">{{ ns.completed }}</h3>
+                    <span class="badge bg-success">Completed</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center border-0 shadow-sm">
+                <div class="card-body py-3">
+                    <h3 class="fw-bold mb-1 text-danger">{{ ns.failed }}</h3>
+                    <span class="badge bg-danger">Failed</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center border-0 shadow-sm">
+                <div class="card-body py-3">
+                    <h3 class="fw-bold mb-1 text-primary">{{ ns.running }}</h3>
+                    <span class="badge bg-primary">Running</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Needs Attention -->
+    {% if attention_sessions %}
+    <div class="mb-4">
+        <h4 class="fw-bold mb-3"><i class="fas fa-bell text-warning"></i> Needs Attention</h4>
+        {% set action_map = {
+            'awaiting_approval': {'icon': 'clipboard-check', 'color': 'warning', 'label': 'Review Plan'},
+            'awaiting_test_approval': {'icon': 'vial', 'color': 'info', 'label': 'Approve Staging'},
+            'failed': {'icon': 'exclamation-triangle', 'color': 'danger', 'label': 'Review Failure'},
+            'needs_review': {'icon': 'search', 'color': 'warning', 'label': 'Manual Review'},
+            'escalated': {'icon': 'hand-paper', 'color': 'danger', 'label': 'Needs Help'},
+            'rolled_back': {'icon': 'undo', 'color': 'warning', 'label': 'Review Rollback'}
+        } %}
+        <div class="list-group">
+            {% for sess in attention_sessions %}
+            {% set action = action_map.get(sess.status, {'icon': 'question', 'color': 'secondary', 'label': sess.status}) %}
+            <a href="{{ url_for('ai_ops.session_view', session_id=sess.id) }}"
+               class="list-group-item list-group-item-action d-flex align-items-center py-2">
+                <span class="badge bg-secondary bg-opacity-10 text-secondary me-2">#{{ sess.session_number }}</span>
+                <span class="fw-medium flex-grow-1 text-truncate">{{ sess.title or 'Untitled Session' }}</span>
+                <small class="text-muted me-3">{{ sess.ai_ops_users.name if sess.ai_ops_users else '' }}</small>
+                <span class="badge bg-{{ action.color }} me-2">
+                    <i class="fas fa-{{ action.icon }} me-1"></i>{{ action.label }}
+                </span>
+                <small class="text-muted" style="white-space:nowrap;">{{ sess.updated_at[:10] if sess.updated_at else '' }}</small>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Recent Sessions -->
+    <h4 class="fw-bold mb-3">Recent Sessions</h4>
+
+    <!-- Filter Bar -->
+    <form method="GET" class="row g-2 mb-3 align-items-end">
+        <div class="col-auto">
+            <label class="form-label small mb-1">User</label>
+            <select name="user_id" class="form-select form-select-sm">
+                <option value="">All Users</option>
+                {% for u in users %}
+                <option value="{{ u.id }}" {{ 'selected' if filters.user_id == u.id }}>{{ u.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-auto">
+            <label class="form-label small mb-1">Status</label>
+            <select name="status" class="form-select form-select-sm">
+                <option value="">All Statuses</option>
+                {% for s in ['gathering_info','planning','awaiting_approval','queued','running','coding','testing','deploying_staging','completed','failed','rolled_back'] %}
+                <option value="{{ s }}" {{ 'selected' if filters.status == s }}>{{ s | replace('_',' ') | title }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-auto">
+            <label class="form-label small mb-1">From</label>
+            <input type="date" name="date_from" class="form-control form-control-sm" value="{{ filters.date_from or '' }}">
+        </div>
+        <div class="col-auto">
+            <label class="form-label small mb-1">To</label>
+            <input type="date" name="date_to" class="form-control form-control-sm" value="{{ filters.date_to or '' }}">
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+            <a href="{{ url_for('ai_ops.dashboard') }}" class="btn btn-sm btn-outline-secondary">Clear</a>
+        </div>
+    </form>
+
+    {% if sessions %}
+    <div class="table-responsive">
+        <table class="table table-hover ai-ops-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Title</th>
+                    <th>User</th>
+                    <th>Mode</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sess in sessions %}
+                <tr>
+                    <td class="text-muted fw-medium">{{ sess.session_number }}</td>
+                    <td>
+                        <a href="{{ url_for('ai_ops.session_view', session_id=sess.id) }}" class="fw-medium text-decoration-none">
+                            {{ sess.title or 'Untitled Session' }}
+                        </a>
+                    </td>
+                    <td class="text-muted">
+                        {{ sess.ai_ops_users.name if sess.ai_ops_users else '—' }}
+                    </td>
+                    <td>
+                        {% if sess.mode == 'bug_fix' %}
+                        <span class="badge bg-danger bg-opacity-10 text-danger">
+                            <i class="fas fa-bug"></i> Bug Fix
+                        </span>
+                        {% else %}
+                        <span class="badge bg-primary bg-opacity-10 text-primary">
+                            <i class="fas fa-lightbulb"></i> Feature
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% set status_colors = {
+                            'gathering_info': 'info',
+                            'planning': 'warning',
+                            'awaiting_approval': 'warning',
+                            'queued': 'warning',
+                            'running': 'primary',
+                            'coding': 'primary',
+                            'testing': 'primary',
+                            'deploying_staging': 'primary',
+                            'completed': 'success',
+                            'failed': 'danger',
+                            'rolled_back': 'warning'
+                        } %}
+                        <span class="badge bg-{{ status_colors.get(sess.status, 'secondary') }}">
+                            {{ sess.status | replace('_', ' ') | title }}
+                        </span>
+                    </td>
+                    <td class="text-muted">
+                        {{ sess.created_at[:10] if sess.created_at else '' }}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('ai_ops.session_view', session_id=sess.id) }}"
+                           class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+        <i class="fas fa-inbox fa-3x mb-3 opacity-50"></i>
+        <p>No sessions found{{ ' matching your filters' if filters.user_id or filters.status or filters.date_from or filters.date_to else '. Start a new one above!' }}</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

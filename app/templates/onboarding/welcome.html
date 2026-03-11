@@ -1,0 +1,98 @@
+{% extends "onboarding/base_onboarding.html" %}
+
+{% block title %}Welcome{% endblock %}
+{% block step_number %}1{% endblock %}
+
+{% block content %}
+<h1 class="card-title">Welcome to AI Ops</h1>
+<p class="card-subtitle">Set up your account in a few minutes. We'll connect your repo, scan your codebase, and get your pipeline running.</p>
+
+<form method="POST" action="{{ url_for('onboarding.welcome') }}">
+  <div class="form-group">
+    <label for="company_name">Company Name</label>
+    <input type="text" id="company_name" name="company_name"
+           value="{{ request.form.get('company_name', '') }}"
+           placeholder="Acme Corp" required>
+  </div>
+
+  <div class="form-group">
+    <label for="email">Work Email</label>
+    <input type="email" id="email" name="email"
+           value="{{ request.form.get('email', '') }}"
+           placeholder="you@yourcompany.com" required>
+  </div>
+
+  <div class="form-group">
+    <label for="password">Password</label>
+    <input type="password" id="password" name="password"
+           placeholder="At least 8 characters" required minlength="8">
+    <p class="help-text">Use a strong password. You'll use this to log in to your AI Ops dashboard.</p>
+  </div>
+
+  <div class="form-group">
+    <label for="app_name">App / Project Name</label>
+    <input type="text" id="app_name" name="app_name"
+           value="{{ request.form.get('app_name', '') }}"
+           placeholder="my-api" required>
+    <p class="help-text">The name of the application this AI Ops instance will manage. Used to label pipelines and reports.</p>
+  </div>
+
+  <hr class="divider">
+
+  <div class="form-group">
+    <label>Plan</label>
+    <div class="radio-group">
+
+      <label class="radio-card">
+        <input type="radio" name="plan" value="trial"
+               {% if request.form.get('plan', 'trial') == 'trial' %}checked{% endif %}>
+        <div class="radio-card-body">
+          <div class="radio-card-title">Free Trial <span class="badge">14 days</span></div>
+          <div class="radio-card-desc">Full access to all features. No credit card required.</div>
+          <div class="radio-card-price">$0 for 14 days</div>
+        </div>
+      </label>
+
+      <label class="radio-card">
+        <input type="radio" name="plan" value="starter"
+               {% if request.form.get('plan') == 'starter' %}checked{% endif %}>
+        <div class="radio-card-body">
+          <div class="radio-card-title">Starter</div>
+          <div class="radio-card-desc">1 repo, up to 5 contributors. Automated PR generation and basic detection.</div>
+          <div class="radio-card-price">$299 / month</div>
+        </div>
+      </label>
+
+      <label class="radio-card">
+        <input type="radio" name="plan" value="pro"
+               {% if request.form.get('plan') == 'pro' %}checked{% endif %}>
+        <div class="radio-card-body">
+          <div class="radio-card-title">Pro <span class="badge badge-blue">Popular</span></div>
+          <div class="radio-card-desc">Up to 10 repos, unlimited contributors. Full multi-agent pipeline, advanced analytics.</div>
+          <div class="radio-card-price">$799 / month</div>
+        </div>
+      </label>
+
+      <label class="radio-card">
+        <input type="radio" name="plan" value="enterprise"
+               {% if request.form.get('plan') == 'enterprise' %}checked{% endif %}>
+        <div class="radio-card-body">
+          <div class="radio-card-title">Enterprise</div>
+          <div class="radio-card-desc">Unlimited repos, SSO, SLA, dedicated support, custom integrations.</div>
+          <div class="radio-card-price">$1,999 / month</div>
+        </div>
+      </label>
+
+    </div>
+  </div>
+
+  <div style="margin-top: 28px;">
+    <button type="submit" class="btn btn-primary btn-full">
+      Get Started
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M3 8h10M9 4l4 4-4 4" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+  </div>
+</form>
+{% endblock %}

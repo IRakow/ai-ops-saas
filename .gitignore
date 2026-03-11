@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+venv/
+.venv/
+.ai-ops-manifest.json
+blast_radius.json
+codebase_context.md
+*.log
+.DS_Store
+node_modules/
+workspaces/

@@ -1,0 +1,85 @@
+{% extends "onboarding/base_onboarding.html" %}
+
+{% block title %}Configure Delivery{% endblock %}
+{% block step_number %}4{% endblock %}
+
+{% block content %}
+<h1 class="card-title">Configure Delivery</h1>
+<p class="card-subtitle">Choose how AI Ops delivers fixes and improvements to your codebase, and where to send notifications.</p>
+
+<form method="POST" action="{{ url_for('onboarding.configure_delivery') }}">
+
+  <div class="form-group">
+    <label>Delivery Method</label>
+    <div class="radio-group">
+
+      <label class="radio-card">
+        <input type="radio" name="deploy_method" value="github_pr"
+               {% if request.form.get('deploy_method', 'github_pr') == 'github_pr' %}checked{% endif %}>
+        <div class="radio-card-body">
+          <div class="radio-card-title">
+            Open a Pull Request
+            <span class="badge badge-blue" style="margin-left:6px;">Recommended</span>
+          </div>
+          <div class="radio-card-desc">
+            AI Ops creates a branch, commits changes, and opens a PR for human review before anything merges.
+            Safest option — you stay in control.
+          </div>
+        </div>
+      </label>
+
+      <label class="radio-card">
+        <input type="radio" name="deploy_method" value="git_push"
+               {% if request.form.get('deploy_method') == 'git_push' %}checked{% endif %}>
+        <div class="radio-card-body">
+          <div class="radio-card-title">Push Directly to Branch</div>
+          <div class="radio-card-desc">
+            AI Ops pushes commits directly to the deploy branch. Use this only if you have
+            downstream CI/CD that gates deployments separately.
+          </div>
+        </div>
+      </label>
+
+      <label class="radio-card">
+        <input type="radio" name="deploy_method" value="webhook_only"
+               {% if request.form.get('deploy_method') == 'webhook_only' %}checked{% endif %}>
+        <div class="radio-card-body">
+          <div class="radio-card-title">Webhook Only (No Git writes)</div>
+          <div class="radio-card-desc">
+            AI Ops sends a JSON payload to your webhook endpoint with the suggested diff and metadata.
+            Your system decides what to do with it.
+          </div>
+        </div>
+      </label>
+
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label for="deploy_branch">Target Branch</label>
+    <input type="text" id="deploy_branch" name="deploy_branch"
+           value="{{ request.form.get('deploy_branch', 'main') }}"
+           placeholder="main">
+    <p class="help-text">PRs will target this branch. Direct pushes will land on this branch. Ignored when using webhook-only delivery.</p>
+  </div>
+
+  <div class="form-group">
+    <label for="notification_emails">Notification Emails</label>
+    <input type="text" id="notification_emails" name="notification_emails"
+           value="{{ request.form.get('notification_emails', '') }}"
+           placeholder="alice@example.com, bob@example.com">
+    <p class="help-text">Comma-separated list of addresses that receive pipeline summaries, PR notifications, and detection alerts. Leave blank to skip email notifications.</p>
+  </div>
+
+  <div class="btn-row">
+    <a href="{{ url_for('onboarding.scan_codebase') }}" class="btn btn-secondary">Back</a>
+    <button type="submit" class="btn btn-primary">
+      Continue
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M3 8h10M9 4l4 4-4 4" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+  </div>
+
+</form>
+{% endblock %}

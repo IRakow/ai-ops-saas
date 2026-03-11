@@ -1,0 +1,348 @@
+/* Bug Intake System — Floating buttons, modals, toasts */
+
+/* ── Button Container (vertical stack) ────────── */
+#bug-intake-container {
+    position: fixed;
+    bottom: 24px;
+    left: 24px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* ── Shared Floating Button ──────────────────── */
+#bug-intake-container button {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+#bug-intake-container button:hover {
+    transform: scale(1.1);
+}
+
+/* ── Bug Button (red) ─────────────────────────── */
+#bug-intake-btn {
+    background: #dc3545;
+}
+#bug-intake-btn:hover {
+    background: #c82333;
+}
+
+/* ── Feature Request Button (amber) ──────────── */
+#feature-request-btn {
+    background: #f0ad4e;
+}
+#feature-request-btn:hover {
+    background: #ec971f;
+}
+
+/* ── Report Modal ───────────────────────────────── */
+#bug-intake-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(0,0,0,0.5);
+    align-items: center;
+    justify-content: center;
+}
+#bug-intake-modal-overlay.active {
+    display: flex;
+}
+#bug-intake-modal {
+    background: #fff;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 480px;
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 24px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+#bug-intake-modal h3 {
+    margin: 0 0 16px;
+    font-size: 18px;
+    color: #333;
+}
+#bug-intake-modal textarea {
+    width: 100%;
+    min-height: 80px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 14px;
+    resize: vertical;
+    font-family: inherit;
+}
+#bug-intake-modal textarea:focus {
+    outline: none;
+    border-color: #4a90d9;
+    box-shadow: 0 0 0 2px rgba(74,144,217,0.2);
+}
+#bug-intake-screenshot-preview {
+    margin: 12px 0;
+    max-height: 150px;
+    border-radius: 6px;
+    border: 1px solid #eee;
+    display: none;
+}
+#bug-intake-screenshot-preview img {
+    max-width: 100%;
+    max-height: 148px;
+    border-radius: 6px;
+    display: block;
+}
+#bug-intake-modal .bi-context-note {
+    font-size: 12px;
+    color: #888;
+    margin: 8px 0 16px;
+}
+#bug-intake-modal .bi-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+#bug-intake-modal .bi-actions button {
+    padding: 8px 20px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+#bug-intake-submit-btn {
+    background: #dc3545;
+    color: #fff;
+}
+#bug-intake-submit-btn:hover {
+    background: #c82333;
+}
+#bug-intake-submit-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+#bug-intake-cancel-btn {
+    background: #f0f0f0;
+    color: #333;
+}
+#bug-intake-cancel-btn:hover {
+    background: #e0e0e0;
+}
+
+/* ── Feature Request Modal ─────────────────────── */
+#feature-request-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(0,0,0,0.5);
+    align-items: center;
+    justify-content: center;
+}
+#feature-request-modal-overlay.active {
+    display: flex;
+}
+#feature-request-modal {
+    background: #fff;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 480px;
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 24px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+#feature-request-modal h3 {
+    margin: 0 0 16px;
+    font-size: 18px;
+    color: #333;
+}
+#feature-request-modal textarea {
+    width: 100%;
+    min-height: 100px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 14px;
+    resize: vertical;
+    font-family: inherit;
+}
+#feature-request-modal textarea:focus {
+    outline: none;
+    border-color: #f0ad4e;
+    box-shadow: 0 0 0 2px rgba(240,173,78,0.2);
+}
+#feature-request-modal .bi-context-note {
+    font-size: 12px;
+    color: #888;
+    margin: 8px 0 16px;
+}
+#feature-request-modal .bi-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+#feature-request-modal .bi-actions button {
+    padding: 8px 20px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+#feature-request-submit-btn {
+    background: #f0ad4e;
+    color: #fff;
+}
+#feature-request-submit-btn:hover {
+    background: #ec971f;
+}
+#feature-request-submit-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+#feature-request-cancel-btn {
+    background: #f0f0f0;
+    color: #333;
+}
+#feature-request-cancel-btn:hover {
+    background: #e0e0e0;
+}
+
+/* ── Toast Container ────────────────────────────── */
+#bug-intake-toasts {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 10001;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 8px;
+    pointer-events: none;
+}
+.bug-intake-toast {
+    background: #333;
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    pointer-events: auto;
+    animation: biToastSlide 0.3s ease;
+    max-width: 340px;
+}
+.bug-intake-toast.success {
+    background: #28a745;
+}
+.bug-intake-toast.error {
+    background: #dc3545;
+}
+.bug-intake-toast.info {
+    background: #17a2b8;
+}
+@keyframes biToastSlide {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Notes Intake Button (teal) ─────────────── */
+#notes-intake-btn {
+    background: #20c997;
+}
+#notes-intake-btn:hover {
+    background: #1baa80;
+}
+
+/* ── Notes Intake Modal ────────────────────────── */
+#notes-intake-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(0,0,0,0.5);
+    align-items: center;
+    justify-content: center;
+}
+#notes-intake-modal-overlay.active {
+    display: flex;
+}
+#notes-intake-modal {
+    background: #fff;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 480px;
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 24px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+#notes-intake-modal h3 {
+    margin: 0 0 16px;
+    font-size: 18px;
+    color: #333;
+}
+#notes-intake-modal textarea {
+    width: 100%;
+    min-height: 100px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 14px;
+    resize: vertical;
+    font-family: inherit;
+}
+#notes-intake-modal textarea:focus {
+    outline: none;
+    border-color: #20c997;
+    box-shadow: 0 0 0 2px rgba(32,201,151,0.2);
+}
+#notes-intake-modal .bi-context-note {
+    font-size: 12px;
+    color: #888;
+    margin: 8px 0 16px;
+}
+#notes-intake-modal .bi-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+#notes-intake-modal .bi-actions button {
+    padding: 8px 20px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+#notes-intake-submit-btn {
+    background: #20c997;
+    color: #fff;
+}
+#notes-intake-submit-btn:hover {
+    background: #1baa80;
+}
+#notes-intake-submit-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+#notes-intake-cancel-btn {
+    background: #f0f0f0;
+    color: #333;
+}
+#notes-intake-cancel-btn:hover {
+    background: #e0e0e0;
+}

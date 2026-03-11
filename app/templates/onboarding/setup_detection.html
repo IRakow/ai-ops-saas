@@ -1,0 +1,149 @@
+{% extends "onboarding/base_onboarding.html" %}
+
+{% block title %}Setup Detection{% endblock %}
+{% block step_number %}5{% endblock %}
+
+{% block content %}
+<h1 class="card-title">Setup Error Detection</h1>
+<p class="card-subtitle">
+  Drop this snippet into your app to send errors and events to AI Ops. When something breaks,
+  the pipeline triggers automatically.
+</p>
+
+<div class="info-box">
+  <strong>How it works:</strong> The snippet POSTs error events to your intake endpoint.
+  AI Ops receives them, classifies the issue, and dispatches the agent pipeline to investigate and open a fix.
+</div>
+
+<div class="form-group" style="margin-top:8px;">
+  <label>JavaScript Snippet</label>
+  <div class="code-block" id="snippet-block">
+    <button class="copy-btn" id="copy-btn" onclick="copySnippet()">Copy</button>
+    <pre id="snippet-code">&lt;script&gt;
+(function() {
+  var AI_OPS_KEY    = "{{ api_key }}";
+  var AI_OPS_INTAKE = "{{ intake_url }}";
+
+  function send(payload) {
+    try {
+      navigator.sendBeacon(AI_OPS_INTAKE, JSON.stringify(payload));
+    } catch (e) {
+      var xhr = new XMLHttpRequest();
+      xhr.open("POST", AI_OPS_INTAKE, true);
+      xhr.setRequestHeader("Content-Type", "application/json");
+      xhr.setRequestHeader("X-AI-Ops-Key", AI_OPS_KEY);
+      xhr.send(JSON.stringify(payload));
+    }
+  }
+
+  window.addEventListener("error", function(e) {
+    send({
+      type: "uncaught_error",
+      message: e.message,
+      source: e.filename,
+      lineno: e.lineno,
+      colno: e.colno,
+      stack: e.error ? e.error.stack : null,
+      url: window.location.href,
+      ts: Date.now()
+    });
+  });
+
+  window.addEventListener("unhandledrejection", function(e) {
+    send({
+      type: "unhandled_rejection",
+      message: String(e.reason),
+      stack: e.reason && e.reason.stack ? e.reason.stack : null,
+      url: window.location.href,
+      ts: Date.now()
+    });
+  });
+
+  window._aiOps = { capture: send, key: AI_OPS_KEY };
+})();
+&lt;/script&gt;</pre>
+  </div>
+  <p class="help-text">
+    Paste this before <code style="background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:12px;">&lt;/body&gt;</code> in your HTML, or load it via your asset pipeline.
+    It auto-captures uncaught JS errors and unhandled promise rejections with no extra configuration.
+  </p>
+</div>
+
+<hr class="divider">
+
+<div class="form-group">
+  <label>Your Intake Endpoint</label>
+  <div style="display:flex;gap:10px;align-items:center;">
+    <input type="text" value="{{ intake_url }}" readonly
+           style="background:#f8fafc;color:#475569;cursor:default;"
+           onclick="this.select()">
+    <button type="button" class="btn btn-secondary"
+            style="white-space:nowrap;padding:10px 16px;"
+            onclick="navigator.clipboard.writeText('{{ intake_url }}')">Copy URL</button>
+  </div>
+  <p class="help-text">Send POST requests here with <code style="background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:12px;">X-AI-Ops-Key: {{ api_key }}</code> in the header to submit events from any environment.</p>
+</div>
+
+<div class="form-group">
+  <label>Your API Key</label>
+  <div style="display:flex;gap:10px;align-items:center;">
+    <input type="text" value="{{ api_key }}" readonly
+           style="background:#f8fafc;color:#475569;cursor:default;font-family:'SFMono-Regular',Consolas,monospace;font-size:13px;"
+           onclick="this.select()">
+    <button type="button" class="btn btn-secondary"
+            style="white-space:nowrap;padding:10px 16px;"
+            onclick="navigator.clipboard.writeText('{{ api_key }}')">Copy Key</button>
+  </div>
+  <p class="help-text">Keep this private. Rotate it any time from your dashboard at <strong>{{ saas_domain }}</strong>.</p>
+</div>
+
+<hr class="divider">
+
+<p style="font-size:13px;color:#6b7280;margin-bottom:20px;line-height:1.6;">
+  Not ready to add the snippet yet? You can skip this step and add it later from your dashboard.
+  The pipeline also accepts events from server-side integrations, webhooks, and the REST API.
+</p>
+
+<form method="POST" action="{{ url_for('onboarding.setup_detection') }}">
+  <div class="btn-row">
+    <a href="{{ url_for('onboarding.configure_delivery') }}" class="btn btn-secondary">Back</a>
+    <button type="submit" class="btn btn-primary" style="flex:2;">
+      Complete Setup
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M2 8l4 4 8-8" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+  </div>
+</form>
+
+<script>
+  function copySnippet() {
+    var code = document.getElementById('snippet-code').innerText;
+    var btn  = document.getElementById('copy-btn');
+    navigator.clipboard.writeText(code).then(function() {
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(function() {
+        btn.textContent = 'Copy';
+        btn.classList.remove('copied');
+      }, 2000);
+    }).catch(function() {
+      /* fallback for older browsers */
+      var ta = document.createElement('textarea');
+      ta.value = code;
+      ta.style.position = 'fixed';
+      ta.style.opacity  = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(function() {
+        btn.textContent = 'Copy';
+        btn.classList.remove('copied');
+      }, 2000);
+    });
+  }
+</script>
+{% endblock %}

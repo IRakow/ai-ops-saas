@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}AI Ops Admin{% endblock %}</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f0f1a;
+      color: #e0e0e0;
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 220px;
+      background: #1a1a2e;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      z-index: 100;
+    }
+
+    .sidebar-brand {
+      padding: 20px 20px 16px;
+      border-bottom: 1px solid #2a2a45;
+    }
+
+    .sidebar-brand .brand-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: #4a90d9;
+      letter-spacing: 0.5px;
+    }
+
+    .sidebar-brand .brand-sub {
+      font-size: 11px;
+      color: #666;
+      margin-top: 2px;
+    }
+
+    .sidebar-nav {
+      flex: 1;
+      padding: 12px 0;
+    }
+
+    .sidebar-nav a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 20px;
+      color: #aaa;
+      text-decoration: none;
+      font-size: 13.5px;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .sidebar-nav a:hover,
+    .sidebar-nav a.active {
+      background: rgba(74, 144, 217, 0.12);
+      color: #4a90d9;
+    }
+
+    .sidebar-nav a .nav-icon {
+      font-size: 15px;
+      width: 18px;
+      text-align: center;
+    }
+
+    .sidebar-footer {
+      padding: 14px 20px;
+      border-top: 1px solid #2a2a45;
+      font-size: 11px;
+      color: #444;
+    }
+
+    /* Top bar */
+    .topbar {
+      position: fixed;
+      top: 0;
+      left: 220px;
+      right: 0;
+      height: 52px;
+      background: #131325;
+      border-bottom: 1px solid #2a2a45;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      z-index: 90;
+    }
+
+    .topbar-left {
+      font-size: 14px;
+      font-weight: 600;
+      color: #ccc;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 13px;
+      color: #888;
+    }
+
+    .topbar-right .admin-name {
+      color: #ccc;
+    }
+
+    .topbar-right a {
+      color: #4a90d9;
+      text-decoration: none;
+      font-size: 12.5px;
+    }
+
+    .topbar-right a:hover { text-decoration: underline; }
+
+    /* Main content */
+    .main-content {
+      margin-left: 220px;
+      margin-top: 52px;
+      flex: 1;
+      padding: 28px 32px;
+      min-height: calc(100vh - 52px);
+    }
+
+    /* Flash messages */
+    .flash-messages {
+      margin-bottom: 20px;
+    }
+
+    .flash {
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-size: 13.5px;
+      margin-bottom: 8px;
+    }
+
+    .flash.success { background: rgba(39, 174, 96, 0.15); border: 1px solid #27ae60; color: #2ecc71; }
+    .flash.error   { background: rgba(231, 76, 60, 0.15);  border: 1px solid #e74c3c; color: #e74c3c; }
+    .flash.info    { background: rgba(74, 144, 217, 0.15); border: 1px solid #4a90d9; color: #4a90d9; }
+    .flash.warning { background: rgba(243, 156, 18, 0.15); border: 1px solid #f39c12; color: #f39c12; }
+
+    /* Page header */
+    .page-header {
+      margin-bottom: 24px;
+    }
+
+    .page-header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: #e8e8e8;
+    }
+
+    .page-header p {
+      font-size: 13px;
+      color: #666;
+      margin-top: 4px;
+    }
+
+    /* Cards */
+    .card {
+      background: #1a1a2e;
+      border: 1px solid #2a2a45;
+      border-radius: 8px;
+      padding: 20px;
+    }
+
+    .card-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 14px;
+    }
+
+    /* Stats grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .stat-card {
+      background: #1a1a2e;
+      border: 1px solid #2a2a45;
+      border-radius: 8px;
+      padding: 18px 20px;
+    }
+
+    .stat-label {
+      font-size: 11.5px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+
+    .stat-value {
+      font-size: 30px;
+      font-weight: 700;
+      color: #4a90d9;
+      margin-top: 6px;
+      line-height: 1;
+    }
+
+    /* Tables */
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+    }
+
+    thead th {
+      background: #111126;
+      color: #888;
+      font-weight: 600;
+      font-size: 11.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid #2a2a45;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid #1e1e38;
+      transition: background 0.12s;
+    }
+
+    tbody tr:hover { background: rgba(74, 144, 217, 0.05); }
+
+    tbody td {
+      padding: 11px 14px;
+      color: #ccc;
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-size: 11.5px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+
+    .badge-active    { background: rgba(39, 174, 96, 0.15); color: #2ecc71; border: 1px solid #27ae60; }
+    .badge-trial     { background: rgba(243, 156, 18, 0.15); color: #f39c12; border: 1px solid #e67e22; }
+    .badge-suspended { background: rgba(231, 76, 60, 0.15);  color: #e74c3c; border: 1px solid #c0392b; }
+    .badge-pending   { background: rgba(149, 165, 166, 0.15); color: #95a5a6; border: 1px solid #7f8c8d; }
+    .badge-processing { background: rgba(74, 144, 217, 0.15); color: #4a90d9; border: 1px solid #2980b9; }
+
+    /* Buttons */
+    .btn {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      text-decoration: none;
+      transition: opacity 0.15s;
+    }
+
+    .btn:hover { opacity: 0.85; }
+
+    .btn-primary   { background: #4a90d9; color: #fff; }
+    .btn-danger    { background: #e74c3c; color: #fff; }
+    .btn-success   { background: #27ae60; color: #fff; }
+    .btn-secondary { background: #2a2a45; color: #aaa; }
+
+    .btn-sm {
+      padding: 5px 12px;
+      font-size: 12px;
+    }
+
+    /* Links */
+    a.row-link {
+      color: #4a90d9;
+      text-decoration: none;
+    }
+
+    a.row-link:hover { text-decoration: underline; }
+
+    /* Section divider */
+    .section-gap { margin-top: 32px; }
+  </style>
+</head>
+<body>
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-name">AI Ops Admin</div>
+      <div class="brand-sub">Operator Console</div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="{{ url_for('admin.dashboard') }}" class="{{ 'active' if request.endpoint == 'admin.dashboard' }}">
+        <span class="nav-icon">&#9636;</span> Dashboard
+      </a>
+      <a href="{{ url_for('admin.tenants') }}" class="{{ 'active' if request.endpoint in ('admin.tenants', 'admin.tenant_detail') }}">
+        <span class="nav-icon">&#9640;</span> Tenants
+      </a>
+      <a href="{{ url_for('admin.queue') }}" class="{{ 'active' if request.endpoint == 'admin.queue' }}">
+        <span class="nav-icon">&#9641;</span> Queue
+      </a>
+      <a href="{{ url_for('admin.billing') }}" class="{{ 'active' if request.endpoint == 'admin.billing' }}">
+        <span class="nav-icon">&#9633;</span> Billing
+      </a>
+      <a href="{{ url_for('admin.system') }}" class="{{ 'active' if request.endpoint == 'admin.system' }}">
+        <span class="nav-icon">&#9670;</span> System
+      </a>
+    </nav>
+    <div class="sidebar-footer">v1.0 &mdash; AI Ops SaaS</div>
+  </aside>
+
+  <div class="topbar">
+    <div class="topbar-left">{% block topbar_title %}Admin{% endblock %}</div>
+    <div class="topbar-right">
+      <span class="admin-name">{{ current_admin.email if current_admin else 'Admin' }}</span>
+      <a href="{{ url_for('admin.logout') }}">Log out</a>
+    </div>
+  </div>
+
+  <main class="main-content">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-messages">
+          {% for category, message in messages %}
+            <div class="flash {{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+</body>
+</html>

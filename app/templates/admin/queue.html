@@ -1,0 +1,67 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}Queue — AI Ops Admin{% endblock %}
+{% block topbar_title %}Queue{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Task Queue</h1>
+  <p>{{ tasks|length }} task{{ 's' if tasks|length != 1 }} in queue</p>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Tenant</th>
+          <th>Type</th>
+          <th>Phase</th>
+          <th>Status</th>
+          <th>Created</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for task in tasks %}
+        <tr>
+          <td>
+            {% if task.tenants %}
+              <a class="row-link" href="{{ url_for('admin.tenant_detail', tenant_id=task.tenant_id) }}">
+                {{ task.tenants.name }}
+              </a>
+            {% else %}
+              <span style="color: #555;">—</span>
+            {% endif %}
+          </td>
+          <td style="color: #aaa; font-size: 13px;">{{ task.task_type or task.type or '—' }}</td>
+          <td style="color: #888; font-size: 13px;">{{ task.phase or '—' }}</td>
+          <td>
+            {% set st = (task.status or '') | lower %}
+            {% if st == 'pending' %}
+              <span class="badge badge-pending">Pending</span>
+            {% elif st in ('processing', 'running') %}
+              <span class="badge badge-processing">{{ task.status | capitalize }}</span>
+            {% elif st == 'completed' %}
+              <span class="badge badge-active">Completed</span>
+            {% elif st == 'failed' %}
+              <span class="badge badge-suspended">Failed</span>
+            {% else %}
+              <span class="badge badge-pending">{{ task.status | capitalize if task.status else '—' }}</span>
+            {% endif %}
+          </td>
+          <td style="font-size: 12.5px; color: #666;">
+            {{ task.created_at.strftime('%Y-%m-%d %H:%M') if task.created_at else '—' }}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" style="text-align: center; color: #555; padding: 32px;">
+            Queue is empty.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

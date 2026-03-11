@@ -1,0 +1,430 @@
+{% extends "ai_ops/base_ai_ops.html" %}
+
+{% block title %}Code Changes Review{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* --- Diff Display --- */
+    .diff-container {
+        border: 1px solid #e0e4ea;
+        border-radius: 8px;
+        overflow: hidden;
+        margin-bottom: 16px;
+    }
+    .diff-file-header {
+        background: #f8f9fa;
+        border-bottom: 1px solid #e0e4ea;
+        padding: 10px 16px;
+        font-weight: 700;
+        font-size: 0.9rem;
+        color: #1a1a2e;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .diff-file-header i {
+        color: #6c757d;
+    }
+    .diff-content {
+        overflow-x: auto;
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+        font-size: 0.82rem;
+        line-height: 1.6;
+        margin: 0;
+        padding: 0;
+    }
+    .diff-content pre {
+        margin: 0;
+        padding: 0;
+        white-space: pre;
+    }
+    .diff-line {
+        display: block;
+        padding: 1px 16px;
+        min-height: 1.6em;
+    }
+    .diff-line-add {
+        background: #d4edda;
+        color: #155724;
+    }
+    .diff-line-remove {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    .diff-line-info {
+        background: #e8f0fe;
+        color: #0d6efd;
+        font-weight: 600;
+        padding-top: 8px;
+        padding-bottom: 4px;
+    }
+    .diff-line-context {
+        color: #495057;
+    }
+
+    /* --- File Sidebar --- */
+    .diff-sidebar {
+        position: sticky;
+        top: 70px;
+    }
+    .diff-file-link {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 6px;
+        color: #495057;
+        text-decoration: none;
+        font-size: 0.88rem;
+        transition: background 0.15s;
+    }
+    .diff-file-link:hover {
+        background: #f0f2f5;
+        color: #0d6efd;
+    }
+    .diff-file-link.active {
+        background: #e8f0fe;
+        color: #0d6efd;
+        font-weight: 600;
+    }
+    .diff-file-badge {
+        font-size: 0.7rem;
+        padding: 2px 6px;
+    }
+
+    /* --- Stats Bar --- */
+    .diff-stats {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+    .diff-stat-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.9rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <!-- Sidebar: File List -->
+        <div class="col-lg-3 d-none d-lg-block">
+            <div class="diff-sidebar">
+                <div class="card ai-ops-card shadow">
+                    <div class="card-header bg-white py-3">
+                        <h6 class="mb-0 fw-bold">
+                            <i class="fas fa-folder-open text-warning me-2"></i> Changed Files
+                        </h6>
+                    </div>
+                    <div class="card-body p-2">
+                        {% if files_changed %}
+                        <nav>
+                            {% for filename in files_changed %}
+                            <a href="#file-{{ loop.index }}" class="diff-file-link">
+                                <i class="fas fa-file-code text-muted"></i>
+                                <span class="text-truncate">{{ filename.split('/')[-1] }}</span>
+                            </a>
+                            {% endfor %}
+                        </nav>
+                        {% else %}
+                        <p class="text-muted small p-2 mb-0">No files listed.</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Back navigation in sidebar -->
+                <div class="mt-3">
+                    <a href="{{ url_for('ai_ops.plan_view', session_id=session.id) }}"
+                       class="btn btn-outline-secondary w-100">
+                        <i class="fas fa-arrow-left me-1"></i> Back to Plan
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content: Diff Display -->
+        <div class="col-lg-9">
+            <!-- Back Link (mobile) -->
+            <div class="mb-4 d-lg-none">
+                <a href="{{ url_for('ai_ops.plan_view', session_id=session.id) }}" class="text-decoration-none">
+                    <i class="fas fa-arrow-left"></i> Back to Plan
+                </a>
+            </div>
+
+            <!-- Header -->
+            <div class="card ai-ops-card shadow mb-4">
+                <div class="card-header bg-white py-3">
+                    <h4 class="mb-1 fw-bold">
+                        <i class="fas fa-code-compare text-primary"></i> Code Changes Review
+                    </h4>
+                    <p class="text-muted mb-0">{{ session.title or 'Untitled Session' }}</p>
+                </div>
+                <div class="card-body">
+                    <!-- Summary -->
+                    <div class="d-flex align-items-start gap-3 mb-3">
+                        <div class="ai-ops-mode-icon bg-primary bg-opacity-10 text-primary" style="min-width: 48px; min-height: 48px;">
+                            <i class="fas fa-file-alt fa-lg"></i>
+                        </div>
+                        <div>
+                            <p class="mb-1 fw-medium">
+                                The AI made changes to
+                                <span class="badge bg-primary">{{ files_changed | length }}</span>
+                                file{{ 's' if files_changed | length != 1 else '' }} to fix this issue.
+                            </p>
+                            <p class="text-muted small mb-0">
+                                Review the changes below. Green lines are new code, red lines are removed code.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Diff Stats -->
+                    {% if diff_text %}
+                    {% set add_count = diff_text.split('\n') | select('match', '^\+[^\+]') | list | length %}
+                    {% set remove_count = diff_text.split('\n') | select('match', '^\-[^\-]') | list | length %}
+                    <div class="diff-stats">
+                        <div class="diff-stat-item text-success">
+                            <i class="fas fa-plus-circle"></i>
+                            <span class="fw-bold">{{ add_count }}</span> lines added
+                        </div>
+                        <div class="diff-stat-item text-danger">
+                            <i class="fas fa-minus-circle"></i>
+                            <span class="fw-bold">{{ remove_count }}</span> lines removed
+                        </div>
+                        <div class="diff-stat-item text-muted">
+                            <i class="fas fa-file"></i>
+                            <span class="fw-bold">{{ files_changed | length }}</span> file{{ 's' if files_changed | length != 1 else '' }}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Mobile File List -->
+            <div class="card ai-ops-card shadow mb-4 d-lg-none">
+                <div class="card-header bg-white py-3">
+                    <h6 class="mb-0 fw-bold">
+                        <i class="fas fa-folder-open text-warning me-2"></i> Changed Files
+                    </h6>
+                </div>
+                <div class="card-body p-2">
+                    {% for filename in files_changed %}
+                    <a href="#file-{{ loop.index }}" class="diff-file-link">
+                        <i class="fas fa-file-code text-muted"></i>
+                        <span>{{ filename.split('/')[-1] }}</span>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Diff Output -->
+            {% if diff_text %}
+                {% set current_file = {'index': 0} %}
+                {% set diff_lines = diff_text.split('\n') %}
+                {% set file_blocks = [] %}
+
+                {#
+                    We parse the diff_text into file blocks in JavaScript
+                    for a cleaner experience, but we also provide a clean
+                    server-side rendered version using <pre><code>.
+                #}
+                <div id="diff-display">
+                    {# Server-side rendered diff with syntax highlighting #}
+                </div>
+            {% else %}
+            <div class="card ai-ops-card shadow">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-code fa-3x text-muted opacity-50 mb-3"></i>
+                    <p class="text-muted">No code changes to display.</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Action Buttons -->
+            <div class="card ai-ops-card shadow mt-4">
+                <div class="card-body py-3">
+                    <div class="d-flex flex-wrap gap-2">
+                        {% if session.status == 'awaiting_approval' %}
+                        <button class="btn btn-success btn-lg flex-grow-1" id="approve-deploy-btn"
+                                onclick="approveDeploy()">
+                            <i class="fas fa-rocket me-1"></i> Approve &amp; Deploy
+                        </button>
+                        {% endif %}
+                        <a href="{{ url_for('ai_ops.plan_view', session_id=session.id) }}"
+                           class="btn btn-outline-secondary btn-lg flex-grow-1">
+                            <i class="fas fa-arrow-left me-1"></i> Go Back
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// --- Parse and render the diff with syntax highlighting ---
+(function() {
+    const rawDiff = {{ diff_text | tojson if diff_text else '""' }};
+    const container = document.getElementById('diff-display');
+    if (!rawDiff || !container) return;
+
+    const lines = rawDiff.split('\n');
+    let currentFileIndex = 0;
+    let currentBlock = null;
+    const blocks = [];
+
+    // Parse diff into file blocks
+    lines.forEach(function(line) {
+        if (line.startsWith('diff --git') || line.startsWith('--- a/') && !currentBlock) {
+            // Skip diff --git lines, they precede --- lines
+            if (line.startsWith('diff --git')) return;
+        }
+
+        if (line.startsWith('+++ b/') || (line.startsWith('+++ ') && line !== '+++ /dev/null')) {
+            // New file block
+            currentFileIndex++;
+            const filename = line.replace('+++ b/', '').replace('+++ ', '');
+            currentBlock = {
+                filename: filename,
+                index: currentFileIndex,
+                lines: []
+            };
+            blocks.push(currentBlock);
+            return;
+        }
+
+        if (line.startsWith('--- a/') || line.startsWith('--- ')) {
+            // Skip the --- line (old file indicator)
+            return;
+        }
+
+        if (line.startsWith('diff --git')) {
+            // Skip this marker line
+            return;
+        }
+
+        if (line.startsWith('index ') || line.startsWith('new file') || line.startsWith('deleted file')) {
+            return;
+        }
+
+        if (currentBlock) {
+            currentBlock.lines.push(line);
+        }
+    });
+
+    // Render blocks
+    if (blocks.length === 0) {
+        // Fallback: render raw diff
+        const card = document.createElement('div');
+        card.className = 'diff-container';
+        card.innerHTML =
+            '<div class="diff-file-header"><i class="fas fa-file-code"></i> Changes</div>' +
+            '<div class="diff-content"><pre><code>' + escapeHtml(rawDiff) + '</code></pre></div>';
+        container.appendChild(card);
+        return;
+    }
+
+    blocks.forEach(function(block) {
+        const card = document.createElement('div');
+        card.className = 'diff-container';
+        card.id = 'file-' + block.index;
+
+        // File header
+        const header = document.createElement('div');
+        header.className = 'diff-file-header';
+        header.innerHTML = '<i class="fas fa-file-code"></i> ' + escapeHtml(block.filename);
+        card.appendChild(header);
+
+        // Diff content
+        const content = document.createElement('div');
+        content.className = 'diff-content';
+        const pre = document.createElement('pre');
+        const code = document.createElement('code');
+
+        block.lines.forEach(function(line) {
+            const span = document.createElement('span');
+            span.className = 'diff-line ';
+
+            if (line.startsWith('@@')) {
+                span.className += 'diff-line-info';
+            } else if (line.startsWith('+')) {
+                span.className += 'diff-line-add';
+            } else if (line.startsWith('-')) {
+                span.className += 'diff-line-remove';
+            } else {
+                span.className += 'diff-line-context';
+            }
+
+            span.textContent = line;
+            code.appendChild(span);
+        });
+
+        pre.appendChild(code);
+        content.appendChild(pre);
+        card.appendChild(content);
+        container.appendChild(card);
+    });
+
+    // Activate sidebar links on scroll
+    const fileLinks = document.querySelectorAll('.diff-file-link');
+    if (fileLinks.length > 0 && 'IntersectionObserver' in window) {
+        const observer = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting) {
+                    const id = entry.target.id;
+                    fileLinks.forEach(function(link) {
+                        link.classList.toggle('active', link.getAttribute('href') === '#' + id);
+                    });
+                }
+            });
+        }, { threshold: 0.3 });
+
+        blocks.forEach(function(block) {
+            const el = document.getElementById('file-' + block.index);
+            if (el) observer.observe(el);
+        });
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+})();
+
+// --- Approve & Deploy ---
+function approveDeploy() {
+    const btn = document.getElementById('approve-deploy-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Approving...';
+
+    fetch('/ai-ops/api/session/{{ session.id }}/approve', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.status === 'approved') {
+            window.location.href = '/ai-ops/session/{{ session.id }}/status';
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-rocket me-1"></i> Approve & Deploy';
+            alert('Something went wrong. Please try again or contact the administrator.');
+        }
+    })
+    .catch(function(err) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-rocket me-1"></i> Approve & Deploy';
+        alert('Could not connect to the server. Please check your internet connection and try again.');
+    });
+}
+</script>
+{% endblock %}

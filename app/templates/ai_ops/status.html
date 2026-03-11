@@ -1,0 +1,129 @@
+{% extends "ai_ops/base_ai_ops.html" %}
+
+{% block title %}Progress{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <!-- Header -->
+            <div class="mb-4">
+                <a href="{{ url_for('ai_ops.session_view', session_id=session.id) }}" class="text-decoration-none">
+                    <i class="fas fa-arrow-left"></i> Back to Session
+                </a>
+            </div>
+
+            <!-- Pipeline Status -->
+            <div class="card ai-ops-card shadow mb-4">
+                <div class="card-header bg-white py-3">
+                    <h4 class="mb-1 fw-bold">
+                        <i class="fas fa-tasks text-primary"></i> Pipeline Progress
+                    </h4>
+                    <p class="text-muted mb-0">{{ session.title or 'Untitled Session' }}</p>
+                </div>
+                <div class="card-body">
+                    <!-- Pipeline Steps -->
+                    <div class="ai-ops-pipeline" id="pipeline">
+                        {% set steps = [
+                            ('gathering_info', 'Gathering Info', 'fas fa-comments'),
+                            ('planning', 'Planning', 'fas fa-project-diagram'),
+                            ('awaiting_approval', 'Approval', 'fas fa-clipboard-check'),
+                            ('coding', 'Coding', 'fas fa-code'),
+                            ('testing', 'Testing', 'fas fa-flask'),
+                            ('deploying_staging', 'Deploying', 'fas fa-rocket'),
+                            ('completed', 'Done', 'fas fa-check-circle'),
+                        ] %}
+
+                        {% set step_order = ['gathering_info', 'planning', 'awaiting_approval', 'coding', 'testing', 'deploying_staging', 'completed'] %}
+                        {% set current_idx = step_order.index(session.status) if session.status in step_order else -1 %}
+
+                        {% for step_id, step_label, step_icon in steps %}
+                        {% set step_idx = loop.index0 %}
+                        <div class="ai-ops-pipeline-step {% if step_idx < current_idx %}completed{% elif step_idx == current_idx %}active{% endif %}"
+                             id="step-{{ step_id }}">
+                            <div class="ai-ops-pipeline-icon">
+                                {% if step_idx < current_idx %}
+                                <i class="fas fa-check-circle text-success"></i>
+                                {% elif step_idx == current_idx %}
+                                <i class="{{ step_icon }} text-primary fa-spin-pulse"></i>
+                                {% else %}
+                                <i class="{{ step_icon }} text-muted"></i>
+                                {% endif %}
+                            </div>
+                            <span class="ai-ops-pipeline-label">{{ step_label }}</span>
+                        </div>
+                        {% if not loop.last %}
+                        <div class="ai-ops-pipeline-connector {% if step_idx < current_idx %}completed{% endif %}"></div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+
+                    {% if session.status == 'failed' %}
+                    <div class="alert alert-danger mt-4">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Pipeline Failed</strong>
+                        <p class="mb-0 mt-1">{{ session.summary or 'An error occurred. The team will investigate.' }}</p>
+                    </div>
+                    {% endif %}
+
+                    {% if session.status == 'completed' %}
+                    <div class="alert alert-success mt-4">
+                        <h5><i class="fas fa-check-circle"></i> Deployed to Staging!</h5>
+                        {% if session.staging_url %}
+                        <p>Test at: <a href="{{ session.staging_url }}" target="_blank" class="fw-bold">{{ session.staging_url }}</a></p>
+                        {% endif %}
+                        <p class="mb-0"><strong>Next step:</strong> Contact your admin to push to production.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Task Progress -->
+            {% if tasks %}
+            <div class="card ai-ops-card shadow">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0 fw-bold">Task Progress</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush" id="task-list">
+                        {% for task in tasks %}
+                        <div class="list-group-item py-3" id="task-{{ task.id }}">
+                            <div class="d-flex align-items-center">
+                                <div class="me-3">
+                                    {% if task.status == 'completed' %}
+                                    <i class="fas fa-check-circle fa-lg text-success"></i>
+                                    {% elif task.status == 'in_progress' %}
+                                    <i class="fas fa-spinner fa-spin fa-lg text-primary"></i>
+                                    {% elif task.status == 'failed' %}
+                                    <i class="fas fa-times-circle fa-lg text-danger"></i>
+                                    {% else %}
+                                    <i class="far fa-circle fa-lg text-muted"></i>
+                                    {% endif %}
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="fw-medium">Task {{ task.task_number }}: {{ task.title }}</div>
+                                    {% if task.description %}
+                                    <small class="text-muted">{{ task.description }}</small>
+                                    {% endif %}
+                                </div>
+                                <span class="badge bg-{{ {'completed': 'success', 'in_progress': 'primary', 'failed': 'danger'}.get(task.status, 'secondary') }}">
+                                    {{ task.status | replace('_', ' ') | title }}
+                                </span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const SESSION_ID = "{{ session.id }}";
+</script>
+<script src="{{ url_for('static', filename='js/ai-ops-status.js') }}"></script>
+{% endblock %}

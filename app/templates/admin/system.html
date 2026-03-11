@@ -1,0 +1,61 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}System — AI Ops Admin{% endblock %}
+{% block topbar_title %}System{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>System</h1>
+  <p>Runtime environment and resource usage</p>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px;">
+
+  <div class="card">
+    <div class="card-title">Workspace</div>
+    <div style="font-family: monospace; font-size: 13px; color: #4a90d9; word-break: break-all;">
+      {{ workspace_base or '—' }}
+    </div>
+    <div style="font-size: 11.5px; color: #555; margin-top: 6px;">Base path for tenant workspaces</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Agent Model</div>
+    <div style="font-size: 15px; font-weight: 600; color: #e0e0e0;">
+      {{ agent_model or '—' }}
+    </div>
+    <div style="font-size: 11.5px; color: #555; margin-top: 6px;">Claude model used for all agents</div>
+  </div>
+
+</div>
+
+<div class="card">
+  <div class="card-title">Disk Usage</div>
+
+  {% set used_pct = ((disk_used_gb / disk_total_gb) * 100) | round(1) if disk_total_gb else 0 %}
+  {% set free_pct = ((disk_free_gb / disk_total_gb) * 100) | round(1) if disk_total_gb else 0 %}
+
+  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 20px;">
+    <div>
+      <div style="font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Total</div>
+      <div style="font-size: 24px; font-weight: 700; color: #ccc;">{{ disk_total_gb }}<span style="font-size: 13px; color: #555; margin-left: 3px;">GB</span></div>
+    </div>
+    <div>
+      <div style="font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Used</div>
+      <div style="font-size: 24px; font-weight: 700; color: #e74c3c;">{{ disk_used_gb }}<span style="font-size: 13px; color: #555; margin-left: 3px;">GB</span></div>
+    </div>
+    <div>
+      <div style="font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Free</div>
+      <div style="font-size: 24px; font-weight: 700; color: #2ecc71;">{{ disk_free_gb }}<span style="font-size: 13px; color: #555; margin-left: 3px;">GB</span></div>
+    </div>
+  </div>
+
+  <!-- Disk usage bar -->
+  <div style="background: #111126; border-radius: 4px; height: 10px; overflow: hidden;">
+    <div style="height: 100%; width: {{ used_pct }}%; background: {% if used_pct > 85 %}#e74c3c{% elif used_pct > 65 %}#f39c12{% else %}#4a90d9{% endif %}; border-radius: 4px; transition: width 0.3s;"></div>
+  </div>
+  <div style="font-size: 11.5px; color: #555; margin-top: 6px;">
+    {{ used_pct }}% used &mdash; {{ free_pct }}% free
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,370 @@
+{% extends "ai_ops/base_ai_ops.html" %}
+
+{% block title %}{{ session.title or 'Session' }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="row">
+        <!-- Sidebar -->
+        <div class="col-md-3 col-lg-2">
+            <div class="ai-ops-sidebar">
+                <div class="mb-3">
+                    <a href="{{ url_for('ai_ops.dashboard') }}" class="btn btn-sm btn-outline-secondary w-100">
+                        <i class="fas fa-arrow-left"></i> Dashboard
+                    </a>
+                </div>
+
+                <div class="mb-3">
+                    <small class="text-muted text-uppercase fw-bold">Session</small>
+                    <p class="mb-1 fw-medium">{{ session.title or 'Untitled' }}</p>
+                    <span class="badge bg-{{ 'danger' if session.mode == 'bug_fix' else 'primary' }}">
+                        {{ 'Bug Fix' if session.mode == 'bug_fix' else 'New Feature' }}
+                    </span>
+                </div>
+
+                <div class="mb-3">
+                    <small class="text-muted text-uppercase fw-bold">Status</small>
+                    <p class="mb-0">
+                        {% set status_colors = {
+                            'gathering_info': 'info',
+                            'queued': 'warning',
+                            'running': 'primary',
+                            'awaiting_approval': 'warning',
+                            'awaiting_test_approval': 'info',
+                            'completed': 'success',
+                            'failed': 'danger',
+                            'rolled_back': 'warning',
+                            'needs_review': 'warning',
+                            'escalated': 'danger'
+                        } %}
+                        <span class="badge bg-{{ status_colors.get(session.status, 'secondary') }}" id="session-status-badge">
+                            {% if session.status == 'running' %}<i class="fas fa-spinner fa-spin me-1"></i>{% endif %}
+                            {{ session.status | replace('_', ' ') | title }}
+                        </span>
+                    </p>
+                </div>
+
+                {% if session.status == 'running' and session.gate_reached %}
+                <div class="mb-3">
+                    <small class="text-muted text-uppercase fw-bold">Progress</small>
+                    {% set gates = ['gate_1', 'gate_2', 'gate_3', 'gate_4', 'gate_5'] %}
+                    {% set gate_names = {'gate_1': 'Reproduce', 'gate_2': 'Trace', 'gate_3': 'Fix', 'gate_4': 'Validate', 'gate_5': 'Report'} %}
+                    {% for gate in gates %}
+                    <div class="small py-1">
+                        {% if gate < session.gate_reached %}
+                        <i class="fas fa-check-circle text-success"></i>
+                        {% elif gate == session.gate_reached %}
+                        <i class="fas fa-spinner fa-spin text-primary"></i>
+                        {% else %}
+                        <i class="far fa-circle text-muted"></i>
+                        {% endif %}
+                        Gate {{ loop.index }}: {{ gate_names.get(gate, '') }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                {% if session.status == 'awaiting_approval' %}
+                <div class="mb-3">
+                    <a href="{{ url_for('ai_ops.plan_view', session_id=session.id) }}"
+                       class="btn btn-warning w-100">
+                        <i class="fas fa-clipboard-check"></i> Review Plan
+                    </a>
+                </div>
+                {% endif %}
+
+                {% if session.status in ('coding', 'testing', 'deploying_staging') %}
+                <div class="mb-3">
+                    <a href="{{ url_for('ai_ops.status_view', session_id=session.id) }}"
+                       class="btn btn-primary w-100">
+                        <i class="fas fa-tasks"></i> View Progress
+                    </a>
+                </div>
+                {% endif %}
+
+                {% if session.staging_url %}
+                <div class="mb-3">
+                    <a href="{{ session.staging_url }}" target="_blank"
+                       class="btn btn-success w-100">
+                        <i class="fas fa-external-link-alt"></i> View Staging
+                    </a>
+                </div>
+                {% endif %}
+
+                <!-- Tasks Sidebar -->
+                {% if tasks %}
+                <div class="mb-3">
+                    <small class="text-muted text-uppercase fw-bold">Tasks</small>
+                    <div class="list-group list-group-flush mt-1">
+                        {% for task in tasks %}
+                        <div class="list-group-item px-0 py-1 border-0 small">
+                            {% if task.status == 'completed' %}
+                            <i class="fas fa-check-circle text-success"></i>
+                            {% elif task.status == 'in_progress' %}
+                            <i class="fas fa-spinner fa-spin text-primary"></i>
+                            {% elif task.status == 'failed' %}
+                            <i class="fas fa-times-circle text-danger"></i>
+                            {% else %}
+                            <i class="far fa-circle text-muted"></i>
+                            {% endif %}
+                            {{ task.title[:40] }}{% if task.title|length > 40 %}...{% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Files -->
+                <div class="mb-3" id="attachments-section" {% if not files %}style="display:none"{% endif %}>
+                    <small class="text-muted text-uppercase fw-bold">Attachments</small>
+                    <div class="mt-1" id="attachments-list">
+                        {% for file in files %}
+                        <div class="small">
+                            <i class="fas fa-paperclip"></i>
+                            {% if file.gcs_url or file.local_url %}
+                            <a href="{{ file.gcs_url or file.local_url }}" target="_blank">{{ file.filename }}</a>
+                            {% else %}
+                            {{ file.filename }}
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Area -->
+        <div class="col-md-9 col-lg-10">
+            <div class="ai-ops-chat-container">
+                <!-- Messages -->
+                <div class="ai-ops-chat-messages" id="chat-messages">
+                    {% if not messages %}
+                    <div class="text-center py-5 text-muted" id="empty-state">
+                        <i class="fas fa-comments fa-3x mb-3 opacity-50"></i>
+                        <p class="mb-0">Describe what's going on. Be as specific as you can!</p>
+                        <small>You can also drag and drop screenshots here.</small>
+                    </div>
+                    {% endif %}
+
+                    {% for msg in messages %}
+                    <div class="ai-ops-message ai-ops-message-{{ msg.sender_type }}"
+                         data-message-id="{{ msg.id }}"
+                         data-message-type="{{ msg.message_type or 'chat' }}">
+                        <div class="ai-ops-message-header">
+                            {% if msg.sender_type == 'user' %}
+                            <i class="fas fa-user"></i>
+                            {% elif msg.sender_type == 'agent' %}
+                            <i class="fas fa-robot"></i>
+                            {% else %}
+                            <i class="fas fa-cog"></i>
+                            {% endif %}
+                            <strong>{{ msg.sender_name }}</strong>
+                            {% if msg.message_type == 'plan' and user.role == 'admin' %}
+                            <span class="badge bg-info ms-2" style="font-size: 0.7em;">Full Technical Analysis</span>
+                            {% elif msg.message_type == 'user_summary' %}
+                            <span class="badge bg-success ms-2" style="font-size: 0.7em;">Summary</span>
+                            {% endif %}
+                            <small class="text-muted ms-2">
+                                {{ msg.created_at[:16] | replace('T', ' ') if msg.created_at else '' }}
+                            </small>
+                        </div>
+                        <div class="ai-ops-message-body">
+                            {{ msg.content | replace('\n', '<br>') | safe }}
+                        </div>
+                    </div>
+                    {% if msg.message_type == 'plan' and user.role == 'admin' %}
+                    <div class="text-center py-2 text-muted small" style="border-top: 1px dashed #ccc; border-bottom: 1px dashed #ccc; margin: 0.5rem 0;">
+                        <i class="fas fa-eye"></i> What users see below
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+
+                <!-- Status Cards -->
+                {% if session.status == 'completed' %}
+                <div class="card border-success m-3">
+                    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="fas fa-check-circle me-2"></i>Fixed and Deployed</h5>
+                        {% if session.agent_elapsed_seconds %}
+                        <span class="badge bg-light text-success">{{ (session.agent_elapsed_seconds // 60) }}m {{ (session.agent_elapsed_seconds % 60) }}s</span>
+                        {% endif %}
+                    </div>
+                    <div class="card-body">
+                        {% if session.summary %}
+                        <p class="mb-2">{{ session.summary }}</p>
+                        {% else %}
+                        <p class="mb-2">The fix has been validated and deployed to {{ config.APP_NAME }}.</p>
+                        {% endif %}
+                        {% if session.commit_sha %}
+                        <div class="mt-2">
+                            <small class="text-muted">Commit:</small>
+                            <code>{{ session.commit_sha }}</code>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if session.status == 'failed' %}
+                <div class="card border-danger m-3">
+                    <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Agent Failed</h5>
+                        {% if session.agent_elapsed_seconds %}
+                        <span class="badge bg-light text-danger">{{ (session.agent_elapsed_seconds // 60) }}m {{ (session.agent_elapsed_seconds % 60) }}s</span>
+                        {% endif %}
+                    </div>
+                    <div class="card-body">
+                        {% if session.escalated and session.escalation_reason %}
+                        <p><strong>Escalated:</strong> {{ session.escalation_reason }}</p>
+                        {% endif %}
+                        <p>{{ session.summary or 'The agent could not complete this task. Check the messages above for details.' }}</p>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if session.status == 'rolled_back' %}
+                <div class="card border-warning m-3">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0"><i class="fas fa-undo me-2"></i>Rolled Back</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if session.summary %}
+                        <p>{{ session.summary }}</p>
+                        {% else %}
+                        <p>The agent attempted a fix but it failed validation. Changes have been rolled back safely.</p>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if session.status == 'needs_review' %}
+                <div class="card border-warning m-3">
+                    <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="fas fa-search me-2"></i>Needs Review</h5>
+                        {% if session.agent_elapsed_seconds %}
+                        <span class="badge bg-dark text-warning">{{ (session.agent_elapsed_seconds // 60) }}m {{ (session.agent_elapsed_seconds % 60) }}s</span>
+                        {% endif %}
+                    </div>
+                    <div class="card-body">
+                        <p>The agent finished but the fix could not be fully validated. Please review the messages and check the site manually.</p>
+                        {% if session.summary %}
+                        <p class="text-muted small">{{ session.summary }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if session.status == 'escalated' %}
+                <div class="card border-danger m-3">
+                    <div class="card-header bg-danger text-white">
+                        <h5 class="mb-0"><i class="fas fa-exclamation-circle me-2"></i>Escalated</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>The agent hit a blocker and needs human intervention.</p>
+                        {% if session.escalation_reason %}
+                        <p><strong>Reason:</strong> {{ session.escalation_reason }}</p>
+                        {% endif %}
+                        {% if session.summary %}
+                        <p class="text-muted small">{{ session.summary }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if session.status == 'queued' %}
+                <div class="alert alert-info m-3">
+                    <h5><i class="fas fa-clock"></i> Queued</h5>
+                    <p>Your request is in the queue. The agent will pick it up shortly. You'll get a text when it's ready for review.</p>
+                </div>
+                {% endif %}
+
+                {% if session.status == 'running' %}
+                <div class="alert alert-primary m-3">
+                    <h5><i class="fas fa-spinner fa-spin"></i> Agent Working</h5>
+                    <p>The autonomous agent is working on your request. This typically takes 10-15 minutes.</p>
+                </div>
+                {% endif %}
+
+                <!-- Input Area -->
+                {% if session.status in ('gathering_info', 'awaiting_approval', 'awaiting_test_approval') %}
+                <div class="ai-ops-chat-input" id="chat-input-area">
+                    <div class="ai-ops-dropzone" id="dropzone">
+                        <form id="chat-form" class="d-flex gap-2 align-items-end">
+                            <div class="flex-grow-1">
+                                <textarea class="form-control" id="message-input" rows="2"
+                                          placeholder="{% if session.status == 'awaiting_approval' %}Ask a question or type feedback...{% else %}Type your message...{% endif %}"
+                                          maxlength="5000"></textarea>
+                            </div>
+                            <div class="d-flex flex-column gap-1">
+                                <label class="btn btn-sm btn-outline-secondary" for="file-input" title="Attach file">
+                                    <i class="fas fa-paperclip"></i>
+                                </label>
+                                <input type="file" id="file-input" class="d-none"
+                                       accept=".png,.jpg,.jpeg,.gif,.pdf,.txt,.log,.csv">
+                                <button type="submit" class="btn btn-primary" id="send-btn">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if session.status == 'gathering_info' %}
+                <div class="p-3 border-top" id="submit-agent-area" style="display: none;">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="auto-approve-checkbox"
+                               {% if user.role == 'admin' %}checked{% endif %}>
+                        <label class="form-check-label small" for="auto-approve-checkbox">
+                            Auto-approve after analysis
+                        </label>
+                    </div>
+                    <button class="btn btn-success w-100" id="submit-agent-btn">
+                        <i class="fas fa-rocket"></i> Submit to Agent
+                    </button>
+                </div>
+                {% endif %}
+
+                {% if session.status == 'awaiting_approval' %}
+                <div class="d-flex gap-2 p-3 border-top">
+                    <button class="btn btn-success flex-grow-1" id="approve-btn">
+                        <i class="fas fa-check"></i> Looks Good — Execute
+                    </button>
+                </div>
+                {% endif %}
+
+                {% if session.status == 'awaiting_test_approval' %}
+                <div class="card border-info m-3">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="fas fa-vial me-2"></i>Ready for Testing</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>The feature has been implemented and is ready on the test server. Please test it, then approve for production deployment.</p>
+                        {% if session.staging_url %}
+                        <a href="{{ session.staging_url }}" target="_blank" class="btn btn-outline-primary mb-2 w-100">
+                            <i class="fas fa-external-link-alt"></i> Open Test Server
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="d-flex gap-2 p-3 border-top">
+                    <button class="btn btn-success flex-grow-1" id="approve-test-btn">
+                        <i class="fas fa-rocket"></i> Deploy to Production
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const SESSION_ID = "{{ session.id }}";
+    const CSRF_TOKEN = "{{ csrf_token() }}";
+    const SESSION_STATUS = "{{ session.status }}";
+    const USER_ROLE = "{{ user.role or 'user' }}";
+</script>
+<script src="{{ url_for('static', filename='js/ai-ops-chat.js') }}"></script>
+{% endblock %}

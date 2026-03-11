@@ -1,0 +1,121 @@
+{% extends "ai_ops/base_ai_ops.html" %}
+
+{% block title %}History{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold mb-0">Session History</h2>
+        <a href="{{ url_for('ai_ops.dashboard') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> New Session
+        </a>
+    </div>
+
+    <!-- Filter Bar -->
+    <form method="GET" class="row g-2 mb-3 align-items-end">
+        <div class="col-auto">
+            <label class="form-label small mb-1">User</label>
+            <select name="user_id" class="form-select form-select-sm">
+                <option value="">All Users</option>
+                {% for u in users %}
+                <option value="{{ u.id }}" {{ 'selected' if filters.user_id == u.id }}>{{ u.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-auto">
+            <label class="form-label small mb-1">Status</label>
+            <select name="status" class="form-select form-select-sm">
+                <option value="">All Statuses</option>
+                {% for s in ['gathering_info','planning','awaiting_approval','queued','running','coding','testing','deploying_staging','completed','failed','rolled_back'] %}
+                <option value="{{ s }}" {{ 'selected' if filters.status == s }}>{{ s | replace('_',' ') | title }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-auto">
+            <label class="form-label small mb-1">From</label>
+            <input type="date" name="date_from" class="form-control form-control-sm" value="{{ filters.date_from or '' }}">
+        </div>
+        <div class="col-auto">
+            <label class="form-label small mb-1">To</label>
+            <input type="date" name="date_to" class="form-control form-control-sm" value="{{ filters.date_to or '' }}">
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+            <a href="{{ url_for('ai_ops.history') }}" class="btn btn-sm btn-outline-secondary">Clear</a>
+        </div>
+    </form>
+
+    {% if sessions %}
+    <div class="row g-3">
+        {% for sess in sessions %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card ai-ops-card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <span class="badge bg-secondary bg-opacity-10 text-secondary me-1">#{{ sess.session_number }}</span>
+                            {% if sess.mode == 'bug_fix' %}
+                            <span class="badge bg-danger bg-opacity-10 text-danger">
+                                <i class="fas fa-bug"></i> Bug Fix
+                            </span>
+                            {% else %}
+                            <span class="badge bg-primary bg-opacity-10 text-primary">
+                                <i class="fas fa-lightbulb"></i> Feature
+                            </span>
+                            {% endif %}
+                        </div>
+
+                        {% set status_colors = {
+                            'gathering_info': 'info',
+                            'planning': 'warning',
+                            'queued': 'warning',
+                            'running': 'primary',
+                            'awaiting_approval': 'warning',
+                            'queued': 'warning',
+                            'running': 'primary',
+                            'coding': 'primary',
+                            'testing': 'primary',
+                            'deploying_staging': 'primary',
+                            'completed': 'success',
+                            'failed': 'danger',
+                            'rolled_back': 'warning'
+                        } %}
+                        <span class="badge bg-{{ status_colors.get(sess.status, 'secondary') }}">
+                            {{ sess.status | replace('_', ' ') | title }}
+                        </span>
+                    </div>
+
+                    <h6 class="fw-bold mb-2">{{ sess.title or 'Untitled Session' }}</h6>
+
+                    {% if sess.ai_ops_users %}
+                    <small class="text-muted">
+                        <i class="fas fa-user"></i> {{ sess.ai_ops_users.name }}
+                    </small>
+                    {% endif %}
+
+                    <small class="text-muted d-block">
+                        <i class="fas fa-calendar"></i> {{ sess.created_at[:10] if sess.created_at else '' }}
+                    </small>
+
+                    {% if sess.summary %}
+                    <p class="text-muted small mt-2 mb-0">{{ sess.summary[:120] }}{% if sess.summary|length > 120 %}...{% endif %}</p>
+                    {% endif %}
+                </div>
+                <div class="card-footer bg-white border-top-0">
+                    <a href="{{ url_for('ai_ops.session_view', session_id=sess.id) }}"
+                       class="btn btn-sm btn-outline-primary w-100">
+                        View Session <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+        <i class="fas fa-history fa-3x mb-3 opacity-50"></i>
+        <p>No sessions found{{ ' matching your filters' if filters.user_id or filters.status or filters.date_from or filters.date_to else '.' }}</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

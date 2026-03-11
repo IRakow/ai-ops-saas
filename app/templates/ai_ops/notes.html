@@ -1,0 +1,400 @@
+{% extends "ai_ops/base_ai_ops.html" %}
+
+{% block title %}Notes & Feedback{% endblock %}
+
+{% block extra_css %}
+<style>
+    .notes-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+    }
+    .notes-header h2 {
+        margin: 0;
+        font-weight: 700;
+    }
+    .btn-analyze {
+        background: #f0ad4e;
+        color: #fff;
+        border: none;
+        padding: 8px 20px;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .btn-analyze:hover { background: #ec971f; color: #fff; }
+    .btn-analyze:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-analyze .spinner-border { width: 16px; height: 16px; border-width: 2px; display: none; }
+    .btn-analyze.loading .spinner-border { display: inline-block; }
+    .btn-analyze.loading .btn-text { display: none; }
+
+    /* Suggestions */
+    #suggestions-section { display: none; margin-bottom: 32px; }
+    #suggestions-section.visible { display: block; }
+    .suggestion-card {
+        background: #fff;
+        border: 1px solid #e1e4e8;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 16px;
+    }
+    .suggestion-card .theme-title {
+        font-size: 16px;
+        font-weight: 700;
+        margin-bottom: 4px;
+    }
+    .suggestion-card .priority-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .priority-High { background: #f8d7da; color: #842029; }
+    .priority-Medium { background: #fff3cd; color: #664d03; }
+    .priority-Low { background: #d1e7dd; color: #0f5132; }
+    .suggestion-card .mode-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+    .mode-bug_fix { background: #f8d7da; color: #842029; }
+    .mode-new_feature { background: #cff4fc; color: #055160; }
+    .suggestion-card .summary { color: #555; margin: 8px 0 12px; font-size: 14px; }
+    .suggestion-card .excerpts-toggle {
+        color: #6c757d;
+        cursor: pointer;
+        font-size: 13px;
+        border: none;
+        background: none;
+        padding: 0;
+        text-decoration: underline;
+    }
+    .suggestion-card .excerpts-list {
+        display: none;
+        margin-top: 8px;
+        padding-left: 16px;
+        font-size: 13px;
+        color: #666;
+    }
+    .suggestion-card .excerpts-list.show { display: block; }
+    .suggestion-card .excerpts-list li { margin-bottom: 4px; }
+    .suggestion-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+    }
+    .btn-promote {
+        background: #28a745;
+        color: #fff;
+        border: none;
+        padding: 6px 16px;
+        border-radius: 5px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .btn-promote:hover { background: #218838; color: #fff; }
+    .btn-dismiss-suggestion {
+        background: transparent;
+        color: #6c757d;
+        border: 1px solid #6c757d;
+        padding: 6px 16px;
+        border-radius: 5px;
+        font-size: 13px;
+        cursor: pointer;
+    }
+    .btn-dismiss-suggestion:hover { background: #f8f9fa; }
+
+    /* Notes grid */
+    .note-card {
+        background: #fff;
+        border: 1px solid #e1e4e8;
+        border-radius: 8px;
+        padding: 16px;
+        height: 100%;
+    }
+    .note-card .note-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+    .note-card .note-name { font-weight: 600; font-size: 14px; }
+    .note-card .note-content { color: #444; font-size: 14px; line-height: 1.5; }
+    .note-card .note-footer { margin-top: 8px; font-size: 12px; color: #999; }
+    .status-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .status-unreviewed { background: #e2e3e5; color: #41464b; }
+    .status-reviewed { background: #cff4fc; color: #055160; }
+    .status-actioned { background: #d1e7dd; color: #0f5132; }
+    .status-dismissed { background: #f8d7da; color: #842029; }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #999;
+    }
+    .empty-state i { font-size: 48px; margin-bottom: 16px; opacity: 0.4; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Header -->
+    <div class="notes-header">
+        <h2><i class="fas fa-sticky-note" style="color: #20c997;"></i> Notes & Feedback</h2>
+        <button class="btn-analyze" id="analyze-btn" {% if unreviewed_count == 0 %}disabled{% endif %}>
+            <span class="spinner-border spinner-border-sm" role="status"></span>
+            <span class="btn-text">
+                <i class="fas fa-brain"></i> Analyze Notes
+                {% if unreviewed_count > 0 %}
+                <span class="badge bg-light text-dark ms-1">{{ unreviewed_count }}</span>
+                {% endif %}
+            </span>
+        </button>
+    </div>
+
+    <!-- AI Suggestions Section -->
+    <div id="suggestions-section" {% if suggestions %}class="visible"{% endif %}>
+        <h4 class="mb-3"><i class="fas fa-lightbulb" style="color: #f0ad4e;"></i> AI Suggestions</h4>
+        <div id="suggestions-container">
+            {% if suggestions %}
+            {% for s in suggestions %}
+            <div class="suggestion-card" data-id="{{ s.id }}" id="suggestion-{{ s.id }}">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <div class="theme-title">{{ s.theme }}</div>
+                        <span class="priority-badge priority-{{ s.priority }}">{{ s.priority }}</span>
+                        <span class="mode-badge mode-{{ s.suggested_mode }}">
+                            {% if s.suggested_mode == 'bug_fix' %}Bug Fix{% else %}New Feature{% endif %}
+                        </span>
+                        {% if s.category and s.category != 'other' %}
+                        <span class="badge bg-secondary bg-opacity-10 text-secondary" style="font-size:11px;">{{ s.category | replace('_', ' ') | title }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <p class="summary">{{ s.summary }}</p>
+                {% if s.related_note_excerpts %}
+                <button class="excerpts-toggle" onclick="this.nextElementSibling.classList.toggle('show')">
+                    Based on {{ s.related_note_excerpts | length }} note{{ 's' if s.related_note_excerpts | length != 1 }}
+                </button>
+                <ul class="excerpts-list">
+                    {% for ex in s.related_note_excerpts %}
+                    <li><strong>{{ ex.name }}:</strong> "{{ ex.excerpt }}"</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+                {% if s.status == 'pending' %}
+                <div class="suggestion-actions">
+                    <button class="btn-promote" onclick="promoteToSession('{{ s.id }}')">
+                        <i class="fas fa-plus"></i> Create Session
+                    </button>
+                    <button class="btn-dismiss-suggestion" onclick="dismissSuggestion('{{ s.id }}')">
+                        Dismiss
+                    </button>
+                </div>
+                {% elif s.status == 'promoted' %}
+                <div class="mt-2">
+                    <span class="badge bg-success"><i class="fas fa-check"></i> Promoted to Session</span>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Notes List -->
+    <h4 class="mb-3">All Notes</h4>
+    {% if notes %}
+    <div class="row g-3">
+        {% for n in notes %}
+        <div class="col-md-6 col-lg-4">
+            <div class="note-card">
+                <div class="note-meta">
+                    <span class="note-name"><i class="fas fa-user"></i> {{ n.submitter_name or 'Anonymous' }}</span>
+                    <span class="status-badge status-{{ n.status }}">{{ n.status }}</span>
+                </div>
+                <div class="note-content">{{ n.content[:200] }}{% if n.content|length > 200 %}...{% endif %}</div>
+                <div class="note-footer">
+                    {% if n.page_url %}<i class="fas fa-link"></i> {{ n.page_url }}{% endif %}
+                    <span class="ms-2"><i class="fas fa-clock"></i> {{ n.created_at[:16] if n.created_at else '' }}</span>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-sticky-note d-block"></i>
+        <p>No notes yet. Notes submitted via the floating button will appear here.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    'use strict';
+
+    var analyzeBtn = document.getElementById('analyze-btn');
+    if (analyzeBtn) {
+        analyzeBtn.addEventListener('click', function() {
+            if (analyzeBtn.disabled) return;
+            analyzeBtn.disabled = true;
+            analyzeBtn.classList.add('loading');
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/ai-ops/api/notes/analyze', true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.onload = function() {
+                analyzeBtn.disabled = false;
+                analyzeBtn.classList.remove('loading');
+                try {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        var data = JSON.parse(xhr.responseText);
+                        if (data.suggestions && data.suggestions.length > 0) {
+                            renderSuggestions(data.suggestions);
+                        } else {
+                            alert('No groupings found. Try again with more notes.');
+                        }
+                    } else {
+                        var err = JSON.parse(xhr.responseText);
+                        alert(err.error || 'Analysis failed.');
+                    }
+                } catch(e) {
+                    alert('Analysis failed. Please try again.');
+                }
+            };
+            xhr.onerror = function() {
+                analyzeBtn.disabled = false;
+                analyzeBtn.classList.remove('loading');
+                alert('Network error during analysis.');
+            };
+            xhr.send('{}');
+        });
+    }
+
+    function renderSuggestions(suggestions) {
+        var section = document.getElementById('suggestions-section');
+        var container = document.getElementById('suggestions-container');
+        if (!section || !container) return;
+
+        section.classList.add('visible');
+        container.innerHTML = '';
+
+        for (var i = 0; i < suggestions.length; i++) {
+            var s = suggestions[i];
+            var modeLabel = s.suggested_mode === 'bug_fix' ? 'Bug Fix' : 'New Feature';
+            var categoryBadge = '';
+            if (s.category && s.category !== 'other') {
+                categoryBadge = '<span class="badge bg-secondary bg-opacity-10 text-secondary" style="font-size:11px;">' +
+                    s.category.replace(/_/g, ' ').replace(/\b\w/g, function(l){ return l.toUpperCase(); }) + '</span>';
+            }
+
+            var excerptHtml = '';
+            if (s.related_note_excerpts && s.related_note_excerpts.length > 0) {
+                var items = '';
+                for (var j = 0; j < s.related_note_excerpts.length; j++) {
+                    var ex = s.related_note_excerpts[j];
+                    items += '<li><strong>' + _esc(ex.name) + ':</strong> "' + _esc(ex.excerpt) + '"</li>';
+                }
+                excerptHtml = '<button class="excerpts-toggle" onclick="this.nextElementSibling.classList.toggle(\'show\')">Based on ' +
+                    s.related_note_excerpts.length + ' note' + (s.related_note_excerpts.length !== 1 ? 's' : '') +
+                    '</button><ul class="excerpts-list">' + items + '</ul>';
+            }
+
+            var card = document.createElement('div');
+            card.className = 'suggestion-card';
+            card.id = 'suggestion-' + s.id;
+            card.dataset.id = s.id;
+            card.innerHTML =
+                '<div class="d-flex justify-content-between align-items-start"><div>' +
+                '<div class="theme-title">' + _esc(s.theme) + '</div>' +
+                '<span class="priority-badge priority-' + s.priority + '">' + s.priority + '</span> ' +
+                '<span class="mode-badge mode-' + s.suggested_mode + '">' + modeLabel + '</span> ' +
+                categoryBadge +
+                '</div></div>' +
+                '<p class="summary">' + _esc(s.summary) + '</p>' +
+                excerptHtml +
+                '<div class="suggestion-actions">' +
+                '<button class="btn-promote" onclick="promoteToSession(\'' + s.id + '\')"><i class="fas fa-plus"></i> Create Session</button>' +
+                '<button class="btn-dismiss-suggestion" onclick="dismissSuggestion(\'' + s.id + '\')">Dismiss</button>' +
+                '</div>';
+            container.appendChild(card);
+        }
+    }
+
+    function _esc(str) {
+        var div = document.createElement('div');
+        div.textContent = str || '';
+        return div.innerHTML;
+    }
+
+    // Expose to global for onclick handlers
+    window.promoteToSession = function(suggestionId) {
+        if (!confirm('Create an AI Ops session from this suggestion?')) return;
+
+        var btn = document.querySelector('#suggestion-' + suggestionId + ' .btn-promote');
+        if (btn) btn.disabled = true;
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/ai-ops/api/notes/suggestions/' + suggestionId + '/promote', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.onload = function() {
+            try {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    var data = JSON.parse(xhr.responseText);
+                    if (data.session_url) {
+                        window.location.href = data.session_url;
+                    } else {
+                        window.location.reload();
+                    }
+                } else {
+                    var err = JSON.parse(xhr.responseText);
+                    alert(err.error || 'Failed to create session.');
+                    if (btn) btn.disabled = false;
+                }
+            } catch(e) {
+                alert('Failed to create session.');
+                if (btn) btn.disabled = false;
+            }
+        };
+        xhr.send('{}');
+    };
+
+    window.dismissSuggestion = function(suggestionId) {
+        var card = document.getElementById('suggestion-' + suggestionId);
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/ai-ops/api/notes/suggestions/' + suggestionId + '/dismiss', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.onload = function() {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                if (card) {
+                    card.style.transition = 'opacity 0.3s ease';
+                    card.style.opacity = '0';
+                    setTimeout(function() { card.remove(); }, 300);
+                }
+            }
+        };
+        xhr.send('{}');
+    };
+})();
+</script>
+{% endblock %}
